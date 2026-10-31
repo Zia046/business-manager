@@ -162,6 +162,32 @@ def create_purchase(db, supplier_id, items, paid=0.0, note="", date=None) -> int
 
 
 # =============== RETURNS ===============
+def returnable_items(db_or_conn, kind: str, doc_id: int):
+    """Items of an original invoice ('sale') or purchase ('purchase') that can still be returned.
+    Returns [{product_id, name, sold_qty, returned_qty, remaining, price}] where price is the
+    effective unit price (line discount included for invoices)."""
+    conn = getattr(db_or_conn, "conn", db_or_conn)
+    if kind == "sale":
+        rows = conn.execute(
+            "SELECT ii.product_id, p.name, SUM(ii.qty) AS qty, "
+            "SUM(ii.qty*ii.price-ii.discount)/SUM(ii.qty) AS price FROM invoice_items ii "
+            "JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=? GROUP BY ii.product_id", (doc_id,)).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT pi.product_id, p.name, SUM(pi.qty) AS qty, SUM(pi.qty*pi.price)/SUM(pi.qty) AS price "
+            "FROM purchase_items pi JOIN products p ON p.id=pi.product_id WHERE pi.purchase_id=? "
+            "GROUP BY pi.product_id", (doc_id,)).fetchall()
+    out = []
+    for r in rows:
+        done = conn.execute("SELECT COALESCE(SUM(ri.qty),0) q FROM return_items ri JOIN returns rt ON rt.id=ri.return_id "
+                            "WHERE rt.ref_doc_id=? AND rt.kind=? AND ri.product_id=?",
+                            (doc_id, kind, r["product_id"])).fetchone()["q"]
+        out.append({"product_id": r["product_id"], "name": r["name"], "sold_qty": r["qty"], "returned_qty": done,
+                    "remaining": r["qty"] - done, "price": round(r["price"], 2)})
+    return out
+
+
+
 def sale_return(db, party_id, items, refunded=0.0, ref_invoice_id=None, note="", date=None) -> int:
     """Customer returns goods: stock +, customer balance reduced, optional cash refund."""
     date = date or now()
@@ -232,6 +258,13 @@ def purchase_return(db, supplier_id, items, received=0.0, ref_purchase_id=None, 
             p = c.execute("SELECT * FROM products WHERE id=?", (it["product_id"],)).fetchone()
             if qty > stock_qty(c, p["id"]):
                 raise BusinessError(f"Not enough stock of '{p['name']}' to return")
+            if ref_purchase_id:
+                left = {x["product_id"]: x["remaining"] for x in returnable_items(c, "purchase", ref_purchase_id)}
+                if p["id"] not in left:
+                    raise BusinessError(f"'{p['name']}' is not on the selected purchase")
+                if qty > left[p["id"]]:
+                    raise BusinessError(f"Return quantity of '{p['name']}' is more than bought "
+                                        f"(only {left[p['id']]:g} can still be returned)")
             c.execute("INSERT INTO return_items(return_id,product_id,qty,price,unit_cost) VALUES(?,?,?,?,?)",
                       (rid, p["id"], qty, price, p["avg_cost"]))
             c.execute("INSERT INTO stock_moves(product_id,date,qty,unit_cost,ref_type,ref_id) "

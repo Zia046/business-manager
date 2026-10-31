@@ -16,8 +16,8 @@ def cash_book(db, date_from, date_to):
     opening = r2(db.scalar("SELECT opening_cash FROM company WHERE id=1") + db.scalar(
         "SELECT COALESCE(SUM(CASE direction WHEN 'in' THEN amount ELSE -amount END),0) "
         "FROM cash_book WHERE date < ?", (date_from + _START,)))
-    rows = db.query("SELECT * FROM cash_book WHERE date BETWEEN ? AND ? ORDER BY date, id",
-                    (date_from + _START, date_to + _END))
+    rows = db.query("SELECT c.*, p.name AS party_name FROM cash_book c LEFT JOIN parties p ON p.id=c.party_id "
+                    "WHERE c.date BETWEEN ? AND ? ORDER BY c.date, c.id", (date_from + _START, date_to + _END))
     total_in = r2(sum(r["amount"] for r in rows if r["direction"] == "in"))
     total_out = r2(sum(r["amount"] for r in rows if r["direction"] == "out"))
     return {"opening": opening, "rows": rows, "total_in": total_in, "total_out": total_out,

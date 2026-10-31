@@ -314,3 +314,69 @@ def test_purchase_draft_requires_typed_price(shop):
     assert l2["qty"] == 2 and not d2.serial_mismatch()
     l2["qty"] = 3
     assert len(d2.serial_mismatch()) == 1
+
+
+# ---------- report builders + exports ----------
+def test_cash_book_balance_sheet_vouchers_and_exports(shop, tmp_path):
+    from app.reports import builders, export
+    db, sup, cust, prod = _stocked(shop)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 2, "price": 50000}], paid=30000)
+    payments.receive_from_customer(db, cust, 10000, "recovery")
+    payments.add_expense(db, "Rent", 5000)
+    cb = builders.cash_book_report(db, "2000-01-01", "2999-12-31")
+    assert cb["rows"][0][1] == "Opening balance"
+    assert cb["rows"][-1][-1] == "35,000.00"          # 30000 + 10000 - 5000
+    assert cb["summary"][3] == ("Closing", "35,000.00")
+    bs = builders.balance_sheet_report(db)
+    # cash 35,000 + stock 8 x 40,000 + receivables (100,000 - 30,000 - 10,000) vs payables 400,000
+    assert bs["summary"] == [("Total assets", "415,000.00"), ("Total liabilities", "400,000.00"),
+                             ("Equity", "15,000.00")]
+    vr = builders.vouchers_report(db, "2000-01-01", "2999-12-31")
+    assert len(vr["rows"]) == 1 and vr["rows"][0][2] == "Receipt"
+    co = masters.get_company(db)
+    export.export_csv(cb, tmp_path / "cb.csv")
+    export.export_xlsx(cb, tmp_path / "cb.xlsx")
+    export.build_table_pdf(cb, co, tmp_path / "cb.pdf")
+    assert open(tmp_path / "cb.pdf", "rb").read().startswith(b"%PDF")
+    import openpyxl
+    ws = openpyxl.load_workbook(tmp_path / "cb.xlsx").active
+    assert ws["A1"].value == "Cash Book"
+    assert "Opening balance" in open(tmp_path / "cb.csv", encoding="utf-8-sig").read()
+
+
+def test_returnable_items_and_purchase_return_limit(shop):
+    db, sup, cust, prod = shop
+    pur = trading.create_purchase(db, sup, [{"product_id": prod, "qty": 10, "price": 40000}])
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 4, "price": 50000, "discount": 4000}])
+    r = trading.returnable_items(db, "sale", inv)[0]
+    assert r["sold_qty"] == 4 and r["remaining"] == 4 and r["price"] == 49000   # discount spread per piece
+    trading.sale_return(db, cust, [{"product_id": prod, "qty": 1, "price": r["price"]}], ref_invoice_id=inv)
+    assert trading.returnable_items(db, "sale", inv)[0]["remaining"] == 3
+    trading.purchase_return(db, sup, [{"product_id": prod, "qty": 2, "price": 40000}], ref_purchase_id=pur)
+    assert stock_qty(db.conn, prod) == 10 - 4 + 1 - 2
+    # a product with big opening stock: stock is fine, but the return exceeds what this purchase bought
+    big = masters.add_product(db, "USB Cable", opening_stock=20)
+    p2 = trading.create_purchase(db, sup, [{"product_id": big, "qty": 3, "price": 100}])
+    with pytest.raises(BusinessError, match="more than bought"):
+        trading.purchase_return(db, sup, [{"product_id": big, "qty": 5, "price": 100}], ref_purchase_id=p2)
+    with pytest.raises(BusinessError, match="not on the selected purchase"):
+        trading.purchase_return(db, sup, [{"product_id": prod, "qty": 1, "price": 100}], ref_purchase_id=p2)
+    assert stock_qty(db.conn, big) == 23
+
+
+def test_return_draft_rules(shop):
+    from app.ui.return_model import ReturnDraft
+    db, sup, cust, prod = _stocked(shop)
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 3, "price": 50000}])
+    d = ReturnDraft("sale")
+    d.load_from_document(trading.returnable_items(db, "sale", inv))
+    assert d.problems() == ["Enter a return quantity for at least one product."]
+    d.lines[0]["qty"] = 5
+    assert "only 3" in d.problems()[0]
+    d.lines[0]["qty"] = 2
+    assert d.problems() == [] and d.total() == 100000
+    trading.sale_return(db, cust, d.service_items(), 0, inv)
+    assert stock_qty(db.conn, prod) == 9
+    m = ReturnDraft("purchase")
+    ln = m.add_manual(masters.search_products(db, "samsung")[0])
+    assert ln["price"] is None and "Type the price" in m.problems()[0]   # supplier price must be typed

@@ -8,6 +8,8 @@ from ..config import APP_NAME
 from . import dialogs
 from .parties import PartiesWindow
 from .products import ProductsWindow
+from .returns_ui import ReturnDialog
+from .account_screens import open_balance_sheet, open_cash_book, open_vouchers
 from .payments_ui import PaymentDialog
 from .sale_invoice import SaleInvoiceDialog
 from .stock_purchase import StockPurchaseDialog
@@ -23,6 +25,11 @@ def _change_password(win):
 
 
 MODULES = {
+    "sale_return": lambda win: ReturnDialog(win.db, "sale", win).exec(),
+    "purchase_return": lambda win: ReturnDialog(win.db, "purchase", win).exec(),
+    "cash_book": open_cash_book,
+    "balance_sheet": open_balance_sheet,
+    "vouchers": open_vouchers,
     "stock_purchase": lambda win: StockPurchaseDialog(win.db, win).exec(),
     "cash_received": lambda win: PaymentDialog(win.db, "receive", win).exec(),
     "pay_supplier": lambda win: PaymentDialog(win.db, "pay_supplier", win).exec(),
