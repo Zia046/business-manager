@@ -61,7 +61,8 @@ MENUS = [
 SHORTCUTS = {"sale_invoice": "F2", "stock_purchase": "F3", "cash_received": "F4"}
 
 # Screens that are built (everything else shows a placeholder). Updated as steps finish.
-IMPLEMENTED = {"company_edit", "about", "change_password", "customers", "suppliers", "products", "sale_invoice"}
+IMPLEMENTED = {"company_edit", "about", "change_password", "customers", "suppliers", "products", "sale_invoice",
+               "stock_purchase", "cash_received", "pay_supplier", "pay_customer", "expenses"}
 
 
 def all_keys():

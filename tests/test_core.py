@@ -283,3 +283,34 @@ def test_invoice_draft_totals_profit_and_stock_warning(shop):
     d.lines[0]["qty"] = 2
     inv = trading.create_invoice(db, cust, d.service_items(), discount=d.discount, paid=0)
     assert trading.invoice_profit(db, inv) == d.profit()
+
+
+def test_purchase_and_voucher_pdfs(shop, tmp_path):
+    from app.reports.doc_pdf import build_purchase_pdf, build_voucher_pdf
+    db, sup, cust, prod = shop
+    pid = trading.create_purchase(db, sup, [{"product_id": prod, "qty": 3, "price": 40000}], paid=50000,
+                                  note="Lot 1")
+    assert open(build_purchase_pdf(db, pid, tmp_path / "p.pdf"), "rb").read().startswith(b"%PDF")
+    v = payments.pay_supplier(db, sup, 10000, "advance")
+    assert open(build_voucher_pdf(db, v, tmp_path / "v.pdf"), "rb").read().startswith(b"%PDF")
+    r = payments.receive_from_customer(db, cust, 500)
+    assert open(build_voucher_pdf(db, r, tmp_path / "r.pdf"), "rb").read().startswith(b"%PDF")
+
+
+def test_purchase_draft_requires_typed_price(shop):
+    from app.ui.purchase_model import PurchaseDraft
+    db, sup, cust, prod = shop
+    p = masters.search_products(db, "samsung")[0]
+    d = PurchaseDraft()
+    ln = d.add_product(p)
+    assert ln["price"] is None and len(d.missing_prices()) == 1   # never auto-filled
+    ln["price"], ln["qty"] = 41000, 3
+    assert d.total() == 123000 and not d.missing_prices()
+    pid = trading.create_purchase(db, sup, d.service_items(), paid=23000)
+    assert supplier_balance(db.conn, sup) == 100000 and stock_qty(db.conn, prod) == 3
+    ph = masters.add_product(db, "iPhone 15", track_serial=True)
+    d2 = PurchaseDraft()
+    l2 = d2.add_product(masters.search_products(db, "iphone")[0], ["A1", "A2"])
+    assert l2["qty"] == 2 and not d2.serial_mismatch()
+    l2["qty"] = 3
+    assert len(d2.serial_mismatch()) == 1

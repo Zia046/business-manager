@@ -125,3 +125,23 @@ def invoice_detail(db, invoice_id):
             "company": db.one("SELECT * FROM company WHERE id=1"),
             "balance_due": r2(inv["total"] - inv["paid"]),
             "account_balance": r2(closing)}
+
+
+def purchase_detail(db, purchase_id):
+    pur = db.one("SELECT * FROM purchases WHERE id=?", (purchase_id,))
+    if not pur:
+        return None
+    items = db.query("SELECT pi.*, p.name AS product_name FROM purchase_items pi "
+                     "JOIN products p ON p.id=pi.product_id WHERE pi.purchase_id=? ORDER BY pi.id",
+                     (purchase_id,))
+    return {"purchase": pur, "items": items, "party": db.one("SELECT * FROM parties WHERE id=?", (pur["party_id"],)),
+            "company": db.one("SELECT * FROM company WHERE id=1"),
+            "balance_due": r2(pur["total"] - pur["paid"])}
+
+
+def voucher_detail(db, voucher_no):
+    v = db.one("SELECT * FROM vouchers WHERE no=?", (voucher_no,))
+    if not v:
+        return None
+    return {"voucher": v, "party": db.one("SELECT * FROM parties WHERE id=?", (v["party_id"],)),
+            "company": db.one("SELECT * FROM company WHERE id=1")}

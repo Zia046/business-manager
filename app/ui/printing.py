@@ -28,3 +28,22 @@ def open_file(path):
         subprocess.Popen(["open", str(path)])
     else:
         subprocess.Popen(["xdg-open", str(path)])
+
+
+def print_purchase(db, purchase_id: int) -> Path:
+    from ..reports.doc_pdf import build_purchase_pdf
+    no = db.scalar("SELECT no FROM purchases WHERE id=?", (purchase_id,), "")
+    path = Path(db.data_dir) / "invoices" / f"{no}.pdf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    build_purchase_pdf(db, purchase_id, path)
+    open_file(path)
+    return path
+
+
+def print_voucher(db, voucher_no: str) -> Path:
+    from ..reports.doc_pdf import build_voucher_pdf
+    path = Path(db.data_dir) / "invoices" / f"{voucher_no}.pdf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    build_voucher_pdf(db, voucher_no, path)
+    open_file(path)
+    return path

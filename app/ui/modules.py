@@ -8,7 +8,9 @@ from ..config import APP_NAME
 from . import dialogs
 from .parties import PartiesWindow
 from .products import ProductsWindow
+from .payments_ui import PaymentDialog
 from .sale_invoice import SaleInvoiceDialog
+from .stock_purchase import StockPurchaseDialog
 
 
 def _company_edit(win):
@@ -21,6 +23,11 @@ def _change_password(win):
 
 
 MODULES = {
+    "stock_purchase": lambda win: StockPurchaseDialog(win.db, win).exec(),
+    "cash_received": lambda win: PaymentDialog(win.db, "receive", win).exec(),
+    "pay_supplier": lambda win: PaymentDialog(win.db, "pay_supplier", win).exec(),
+    "pay_customer": lambda win: PaymentDialog(win.db, "pay_customer", win).exec(),
+    "expenses": lambda win: PaymentDialog(win.db, "expense", win).exec(),
     "sale_invoice": lambda win: SaleInvoiceDialog(win.db, win).exec(),
     "customers": lambda win: PartiesWindow(win.db, "customer", win).exec(),
     "suppliers": lambda win: PartiesWindow(win.db, "supplier", win).exec(),
