@@ -1,0 +1,161 @@
+"""Database schema.
+
+Design notes
+- Stock is never stored as a single editable number: it is opening_stock plus
+  the sum of stock_moves. Every sale/purchase/return writes a move, so cancel
+  = delete the moves of that document. Stock can never drift.
+- Party balances work the same way via the `ledger` table:
+    customer balance = opening + SUM(debit - credit)   (positive = customer owes us)
+    supplier balance = opening + SUM(credit - debit)   (positive = we owe supplier)
+- Cash in hand = SUM(cash_book in) - SUM(cash_book out).
+"""
+
+SCHEMA_SQL = """
+CREATE TABLE company (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT NOT NULL, address TEXT NOT NULL, phone TEXT NOT NULL,
+    email TEXT NOT NULL, logo_path TEXT,
+    opening_cash REAL NOT NULL DEFAULT 0
+);
+
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    login_id TEXT NOT NULL UNIQUE,
+    pass_hash TEXT NOT NULL
+);
+
+CREATE TABLE parties (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,          -- system generated numeric ID
+    kind TEXT NOT NULL CHECK (kind IN ('customer','supplier')),
+    name TEXT NOT NULL,
+    phone TEXT, address TEXT,
+    opening_balance REAL NOT NULL DEFAULT 0,
+    is_walkin INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX idx_parties_kind_name ON parties(kind, name);
+
+CREATE TABLE products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category TEXT, tags TEXT, unit TEXT DEFAULT 'pcs',
+    last_purchase_price REAL NOT NULL DEFAULT 0,
+    avg_cost REAL NOT NULL DEFAULT 0,               -- weighted average cost
+    sale_price REAL NOT NULL DEFAULT 0,
+    opening_stock REAL NOT NULL DEFAULT 0,
+    low_stock_level REAL NOT NULL DEFAULT 0,
+    track_serial INTEGER NOT NULL DEFAULT 0,        -- IMEI / serial numbers
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX idx_products_name ON products(name);
+
+CREATE TABLE serials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    serial TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'in_stock' CHECK (status IN ('in_stock','sold')),
+    purchase_id INTEGER, invoice_id INTEGER
+);
+
+CREATE TABLE counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);
+
+CREATE TABLE invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    no TEXT NOT NULL UNIQUE,
+    date TEXT NOT NULL,                              -- ISO yyyy-mm-dd hh:mm:ss
+    party_id INTEGER NOT NULL REFERENCES parties(id),
+    subtotal REAL NOT NULL, discount REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL, paid REAL NOT NULL DEFAULT 0,
+    cost_total REAL NOT NULL DEFAULT 0,              -- cost of goods sold
+    note TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','cancelled'))
+);
+CREATE INDEX idx_invoices_date ON invoices(date);
+CREATE INDEX idx_invoices_party ON invoices(party_id);
+
+CREATE TABLE invoice_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    qty REAL NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0,
+    unit_cost REAL NOT NULL DEFAULT 0, serial TEXT
+);
+
+CREATE TABLE purchases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
+    party_id INTEGER NOT NULL REFERENCES parties(id),
+    total REAL NOT NULL, paid REAL NOT NULL DEFAULT 0, note TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','cancelled'))
+);
+
+CREATE TABLE purchase_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_id INTEGER NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    qty REAL NOT NULL, price REAL NOT NULL, serial TEXT
+);
+
+CREATE TABLE returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    no TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL CHECK (kind IN ('sale','purchase')),
+    date TEXT NOT NULL,
+    party_id INTEGER NOT NULL REFERENCES parties(id),
+    ref_doc_id INTEGER,                              -- original invoice/purchase (optional)
+    total REAL NOT NULL, refunded REAL NOT NULL DEFAULT 0, note TEXT
+);
+
+CREATE TABLE return_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_id INTEGER NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    qty REAL NOT NULL, price REAL NOT NULL, unit_cost REAL NOT NULL DEFAULT 0
+);
+
+CREATE TABLE stock_moves (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    date TEXT NOT NULL,
+    qty REAL NOT NULL,                               -- + in, - out
+    unit_cost REAL NOT NULL DEFAULT 0,
+    ref_type TEXT NOT NULL, ref_id INTEGER NOT NULL, note TEXT
+);
+CREATE INDEX idx_moves_product ON stock_moves(product_id);
+CREATE INDEX idx_moves_ref ON stock_moves(ref_type, ref_id);
+
+CREATE TABLE ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    party_id INTEGER NOT NULL REFERENCES parties(id),
+    date TEXT NOT NULL,
+    debit REAL NOT NULL DEFAULT 0, credit REAL NOT NULL DEFAULT 0,
+    ref_type TEXT NOT NULL, ref_id INTEGER NOT NULL, note TEXT
+);
+CREATE INDEX idx_ledger_party ON ledger(party_id);
+CREATE INDEX idx_ledger_ref ON ledger(ref_type, ref_id);
+
+CREATE TABLE cash_book (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    direction TEXT NOT NULL CHECK (direction IN ('in','out')),
+    amount REAL NOT NULL CHECK (amount > 0),
+    party_id INTEGER REFERENCES parties(id),
+    ref_type TEXT NOT NULL, ref_id INTEGER NOT NULL, note TEXT
+);
+CREATE INDEX idx_cash_date ON cash_book(date);
+CREATE INDEX idx_cash_ref ON cash_book(ref_type, ref_id);
+
+CREATE TABLE expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL, category TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount > 0), note TEXT
+);
+
+CREATE TABLE vouchers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    no TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL CHECK (kind IN ('receipt','payment')),
+    date TEXT NOT NULL, party_id INTEGER REFERENCES parties(id),
+    amount REAL NOT NULL, ref_type TEXT, ref_id INTEGER, note TEXT
+);
+"""
