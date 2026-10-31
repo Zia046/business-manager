@@ -10,5 +10,5 @@ Python 3.11+ / PySide6 / encrypted SQLite. Data folder: D:\BusinessManagerData (
       sale/purchase/returns/payments/reports logic, 17 passing tests
 - [x] Step 2: registration + login screens (PySide6) - run with `python main.py`
 - [x] Step 3: home screen + 6 menus (About, Change Password, Company Edit working; rest are placeholders)
-- [ ] Step 4: master forms, sale invoice, purchase, payments, reports UI
+- [~] Step 4a done: Customers, Suppliers, Products screens. Next: Sale Invoice, Stock Purchase, payments, returns, reports
 - [ ] Step 5: invoice PDF (A4 + 80mm), backup/restore, PyInstaller build

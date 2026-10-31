@@ -229,3 +229,12 @@ def test_menu_spec_matches_requirements():
     assert len(HOME_BUTTONS) == 7
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
+
+
+def test_product_edit_rejects_blank_name(shop):
+    db, _, _, prod = shop
+    with pytest.raises(BusinessError, match="required"):
+        masters.update_product(db, prod, name="   ")
+    assert db.one("SELECT name FROM products WHERE id=?", (prod,))["name"] == "Samsung A15"
+    masters.update_product(db, prod, name="Samsung A16", sale_price=55000)
+    assert db.one("SELECT sale_price FROM products WHERE id=?", (prod,))["sale_price"] == 55000

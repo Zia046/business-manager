@@ -6,6 +6,8 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..config import APP_NAME
 from . import dialogs
+from .parties import PartiesWindow
+from .products import ProductsWindow
 
 
 def _company_edit(win):
@@ -18,6 +20,9 @@ def _change_password(win):
 
 
 MODULES = {
+    "customers": lambda win: PartiesWindow(win.db, "customer", win).exec(),
+    "suppliers": lambda win: PartiesWindow(win.db, "supplier", win).exec(),
+    "products": lambda win: ProductsWindow(win.db, win).exec(),
     "company_edit": _company_edit,
     "about": lambda win: dialogs.show_about(win, win.db),
     "change_password": _change_password,

@@ -69,6 +69,8 @@ def update_product(db, product_id, **fields):
         raise BusinessError(f"Cannot edit: {', '.join(sorted(bad))}")
     if not fields:
         return
+    if "name" in fields and not str(fields["name"]).strip():
+        raise BusinessError("Product name is required")
     sets = ", ".join(f"{k}=?" for k in fields)
     with db.transaction() as c:
         c.execute(f"UPDATE products SET {sets} WHERE id=?", (*fields.values(), product_id))
