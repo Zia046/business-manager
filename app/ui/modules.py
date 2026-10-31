@@ -8,6 +8,7 @@ from ..config import APP_NAME
 from . import dialogs
 from .parties import PartiesWindow
 from .products import ProductsWindow
+from .sale_invoice import SaleInvoiceDialog
 
 
 def _company_edit(win):
@@ -20,6 +21,7 @@ def _change_password(win):
 
 
 MODULES = {
+    "sale_invoice": lambda win: SaleInvoiceDialog(win.db, win).exec(),
     "customers": lambda win: PartiesWindow(win.db, "customer", win).exec(),
     "suppliers": lambda win: PartiesWindow(win.db, "supplier", win).exec(),
     "products": lambda win: ProductsWindow(win.db, win).exec(),

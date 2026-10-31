@@ -108,3 +108,20 @@ def balance_sheet(db):
     assets, liabilities = r2(cash + stock + recv), r2(pay)
     return {"cash": cash, "stock_value": stock, "receivables": recv, "total_assets": assets,
             "payables": pay, "total_liabilities": liabilities, "equity": r2(assets - liabilities)}
+
+
+def invoice_detail(db, invoice_id):
+    """Everything needed to print one invoice (company, customer, lines, totals)."""
+    inv = db.one("SELECT * FROM invoices WHERE id=?", (invoice_id,))
+    if not inv:
+        return None
+    items = db.query(
+        "SELECT ii.*, p.name AS product_name, p.unit FROM invoice_items ii "
+        "JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=? ORDER BY ii.id", (invoice_id,))
+    party = db.one("SELECT * FROM parties WHERE id=?", (inv["party_id"],))
+    from .common import customer_balance
+    closing = customer_balance(db.conn, party["id"]) if not party["is_walkin"] else 0.0
+    return {"invoice": inv, "items": items, "party": party,
+            "company": db.one("SELECT * FROM company WHERE id=1"),
+            "balance_due": r2(inv["total"] - inv["paid"]),
+            "account_balance": r2(closing)}

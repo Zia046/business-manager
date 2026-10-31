@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence, QPixmap
+from PySide6.QtGui import QAction, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QMainWindow, QPushButton,
                                QVBoxLayout, QWidget)
 
@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
         self.db = db
         self.setStyleSheet("QMainWindow, QWidget#home { background: #ffffff; }")
         self._build_menu()
+        QShortcut(QKeySequence("F2"), self, activated=lambda: open_module(self, "sale_invoice", "Sale Invoice"))
         self._build_home()
         self.refresh_header()
         self._tick()

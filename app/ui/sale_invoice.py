@@ -1,0 +1,362 @@
+"""Sale Invoice window (new invoice, or edit a saved one)."""
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QCompleter, QDialog,
+                               QDoubleSpinBox, QFormLayout, QGridLayout, QHBoxLayout, QInputDialog,
+                               QLabel, QLineEdit, QListWidget, QMessageBox, QPlainTextEdit,
+                               QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
+
+from ..services import masters, trading
+from ..services.common import BusinessError
+from .invoice_model import InvoiceDraft
+from .parties import PartyForm
+from .printing import print_invoice
+from .widgets import money
+
+COLS = ["ID", "Product", "Stock", "Qty", "Price", "Discount", "Amount", ""]
+C_ID, C_NAME, C_STOCK, C_QTY, C_PRICE, C_DISC, C_AMT, C_DEL = range(8)
+
+
+def _spin(maximum=1e9):
+    s = QDoubleSpinBox()
+    s.setRange(0, maximum)
+    s.setDecimals(2)
+    s.setGroupSeparatorShown(True)
+    return s
+
+
+class SaleInvoiceDialog(QDialog):
+    def __init__(self, db, parent=None, invoice_id=None):
+        super().__init__(parent)
+        self.db = db
+        self.invoice_id = invoice_id          # set => editing a saved invoice
+        self.draft = InvoiceDraft()
+        self._loading = False
+        self._paid_manual = False
+        self.last_saved_id = None
+        self.setWindowTitle("Edit Sale Invoice" if invoice_id else "Sale Invoice")
+        self.resize(1100, 720)
+        self._build()
+        self._load_customers()
+        if invoice_id:
+            self._load_existing(invoice_id)
+        self._recalc()
+        self.search.setFocus()
+
+    # ================= layout =================
+    def _build(self):
+        root = QVBoxLayout(self)
+
+        # ---- customer row ----
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Customer:"))
+        self.customer = QComboBox()
+        self.customer.setEditable(True)
+        self.customer.setMinimumWidth(320)
+        self.customer.setInsertPolicy(QComboBox.NoInsert)
+        row.addWidget(self.customer)
+        new_c = QPushButton("New Customer")
+        new_c.setObjectName("secondary")
+        new_c.clicked.connect(self._new_customer)
+        row.addWidget(new_c)
+        self.cust_info = QLabel()
+        self.cust_info.setObjectName("subtitle")
+        row.addWidget(self.cust_info)
+        row.addStretch()
+        root.addLayout(row)
+
+        # ---- product search ----
+        self.search = QLineEdit(placeholderText="Search product: name, #tag, ID or similar spelling... "
+                                                "(Enter = add)")
+        self.search.textChanged.connect(self._search_products)
+        self.search.returnPressed.connect(self._add_from_search)
+        root.addWidget(self.search)
+        self.results = QListWidget()
+        self.results.setMaximumHeight(130)
+        self.results.itemDoubleClicked.connect(lambda _: self._add_from_search())
+        root.addWidget(self.results)
+
+        # ---- lines ----
+        self.table = QTableWidget(0, len(COLS))
+        self.table.setHorizontalHeaderLabels(COLS)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setColumnWidth(C_ID, 50)
+        self.table.setColumnWidth(C_NAME, 340)
+        for c in (C_STOCK, C_QTY, C_PRICE, C_DISC, C_AMT):
+            self.table.setColumnWidth(c, 110)
+        self.table.setColumnWidth(C_DEL, 90)
+        self.table.itemChanged.connect(self._cell_changed)
+        root.addWidget(self.table, 1)
+
+        # ---- bottom: note + options (left), totals (right) ----
+        bottom = QHBoxLayout()
+        left = QVBoxLayout()
+        left.addWidget(QLabel("Note (printed at the bottom of the bill):"))
+        self.note = QPlainTextEdit()
+        self.note.setMaximumHeight(70)
+        left.addWidget(self.note)
+        self.show_profit = QCheckBox("Show Profit / Loss")
+        self.show_profit.toggled.connect(self._recalc)
+        left.addWidget(self.show_profit)
+        self.profit_lbl = QLabel()
+        self.profit_lbl.setStyleSheet("font-size: 16px; font-weight: 700;")
+        left.addWidget(self.profit_lbl)
+        self.warn = QLabel()
+        self.warn.setObjectName("error")
+        self.warn.setWordWrap(True)
+        left.addWidget(self.warn)
+        left.addStretch()
+        bottom.addLayout(left, 3)
+
+        totals = QGridLayout()
+        self.subtotal_lbl = QLabel("0.00")
+        self.disc = _spin()
+        self.disc.valueChanged.connect(self._totals_edited)
+        self.total_lbl = QLabel("0.00")
+        self.total_lbl.setStyleSheet("font-size: 28px; font-weight: 800; color: #1b6ef3;")
+        self.paid = _spin()
+        self.paid.valueChanged.connect(self._paid_edited)
+        self.balance_lbl = QLabel("0.00")
+        self.balance_lbl.setStyleSheet("font-weight: 700; font-size: 16px;")
+        for i, (text, w) in enumerate((("Sub Total", self.subtotal_lbl), ("Discount", self.disc),
+                                       ("GRAND TOTAL", self.total_lbl), ("Paid now", self.paid),
+                                       ("Balance (credit)", self.balance_lbl))):
+            totals.addWidget(QLabel(text), i, 0)
+            totals.addWidget(w, i, 1, Qt.AlignRight)
+        bottom.addLayout(totals, 2)
+        root.addLayout(bottom)
+
+        # ---- buttons ----
+        btns = QHBoxLayout()
+        self.size = QComboBox()
+        self.size.addItems(["A4", "80mm"])
+        btns.addWidget(QLabel("Print size:"))
+        btns.addWidget(self.size)
+        btns.addStretch()
+        close = QPushButton("Close")
+        close.setObjectName("secondary")
+        close.clicked.connect(self.reject)
+        save = QPushButton("Save")
+        save.clicked.connect(lambda: self._save(print_after=False))
+        save_print = QPushButton("Save && Print  (Ctrl+P)")
+        save_print.clicked.connect(lambda: self._save(print_after=True))
+        for b in (close, save, save_print):
+            btns.addWidget(b)
+        root.addLayout(btns)
+        QShortcut(QKeySequence("Ctrl+P"), self, activated=lambda: self._save(print_after=True))
+        QShortcut(QKeySequence("Ctrl+S"), self, activated=lambda: self._save(print_after=False))
+        self.customer.currentIndexChanged.connect(self._customer_changed)
+
+    # ================= customers =================
+    def _load_customers(self, select_id=None):
+        rows = masters.search_parties(self.db, "customer", "")
+        rows.sort(key=lambda r: (not r["is_walkin"], r["name"].lower()))  # Walk-in first
+        self.customer.blockSignals(True)
+        self.customer.clear()
+        for r in rows:
+            label = r["name"] if r["is_walkin"] else f"{r['name']}  (ID {r['id']})"
+            self.customer.addItem(label, r["id"])
+        comp = QCompleter([self.customer.itemText(i) for i in range(self.customer.count())], self.customer)
+        comp.setCaseSensitivity(Qt.CaseInsensitive)
+        comp.setFilterMode(Qt.MatchContains)
+        self.customer.setCompleter(comp)
+        idx = self.customer.findData(select_id) if select_id else 0
+        self.customer.setCurrentIndex(max(idx, 0))
+        self.customer.blockSignals(False)
+        self._customer_changed()
+
+    def _party_id(self):
+        pid = self.customer.currentData()
+        if pid is None:  # typed text that matches an item
+            i = self.customer.findText(self.customer.currentText(), Qt.MatchFixedString)
+            pid = self.customer.itemData(i) if i >= 0 else None
+        return pid
+
+    def _is_walkin(self):
+        pid = self._party_id()
+        return bool(pid and self.db.scalar("SELECT is_walkin FROM parties WHERE id=?", (pid,)))
+
+    def _customer_changed(self, *_):
+        pid = self._party_id()
+        if pid and not self._is_walkin():
+            from ..services.common import customer_balance
+            self.cust_info.setText(f"Previous balance: {money(customer_balance(self.db.conn, pid))}")
+        else:
+            self.cust_info.setText("Cash sale - full payment required" if pid else "")
+        self._recalc()
+
+    def _new_customer(self):
+        form = PartyForm(self.db, "customer", parent=self)
+        if form.exec():
+            self._load_customers(select_id=form.saved_id)
+
+    # ================= products / lines =================
+    def _search_products(self, text):
+        self.results.clear()
+        if not text.strip():
+            return
+        for p in masters.search_products(self.db, text, limit=30):
+            self.results.addItem(f"{p['id']}  |  {p['name']}   (stock {p['stock']:g}, "
+                                 f"price {money(p['sale_price'])})")
+            self.results.item(self.results.count() - 1).setData(Qt.UserRole, p)
+        if self.results.count():
+            self.results.setCurrentRow(0)
+
+    def _add_from_search(self):
+        item = self.results.currentItem()
+        if not item:
+            return
+        p = item.data(Qt.UserRole)
+        serial = None
+        if p["track_serial"]:
+            serial, ok = QInputDialog.getText(self, "IMEI / Serial", f"Enter IMEI / serial for {p['name']}:")
+            if not ok or not serial.strip():
+                return
+            serial = serial.strip()
+            if any(ln["serial"] == serial for ln in self.draft.lines):
+                QMessageBox.warning(self, "Duplicate", "This IMEI is already on the invoice.")
+                return
+        self.draft.add_product(p, serial)
+        self.search.clear()
+        self.results.clear()
+        self._refresh_table()
+        self.search.setFocus()
+
+    def _refresh_table(self):
+        self._loading = True
+        self.table.setRowCount(len(self.draft.lines))
+        for r, ln in enumerate(self.draft.lines):
+            name = ln["name"] + (f"  [IMEI {ln['serial']}]" if ln["serial"] else "")
+            cells = [(C_ID, str(ln["product_id"]), False), (C_NAME, name, False),
+                     (C_STOCK, f"{ln['stock']:g}", False), (C_QTY, f"{ln['qty']:g}", not ln["track_serial"]),
+                     (C_PRICE, f"{ln['price']:.2f}", True), (C_DISC, f"{ln['discount']:.2f}", True),
+                     (C_AMT, money(InvoiceDraft.line_amount(ln)), False)]
+            for col, text, editable in cells:
+                it = QTableWidgetItem(text)
+                flags = it.flags() | Qt.ItemIsEditable if editable else it.flags() & ~Qt.ItemIsEditable
+                it.setFlags(flags)
+                if col >= C_STOCK:
+                    it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                if col == C_QTY and ln["qty"] > ln["stock"]:
+                    it.setBackground(QColor("#fdecea"))  # more than available stock
+                self.table.setItem(r, col, it)
+            rm = QPushButton("Remove")
+            rm.setObjectName("secondary")
+            rm.clicked.connect(lambda _=False, i=r: self._remove_line(i))
+            self.table.setCellWidget(r, C_DEL, rm)
+        self._loading = False
+        self._recalc()
+
+    def _remove_line(self, i):
+        if 0 <= i < len(self.draft.lines):
+            del self.draft.lines[i]
+            self._refresh_table()
+
+    def _cell_changed(self, item):
+        if self._loading:
+            return
+        r, c = item.row(), item.column()
+        if c not in (C_QTY, C_PRICE, C_DISC) or r >= len(self.draft.lines):
+            return
+        try:
+            v = float(item.text().replace(",", ""))
+            if v < 0:
+                raise ValueError
+        except ValueError:
+            self.warn.setText("Enter a valid positive number.")
+            self._refresh_table()
+            return
+        ln = self.draft.lines[r]
+        ln[{C_QTY: "qty", C_PRICE: "price", C_DISC: "discount"}[c]] = v
+        self._refresh_table()
+
+    # ================= totals =================
+    def _totals_edited(self, *_):
+        self.draft.discount = self.disc.value()
+        self._recalc()
+
+    def _paid_edited(self, *_):
+        if not self._loading:
+            self._paid_manual = True
+        self._recalc()
+
+    def _recalc(self, *_):
+        d = self.draft
+        d.discount = self.disc.value()
+        total = d.total()
+        self.subtotal_lbl.setText(money(d.subtotal()))
+        self.total_lbl.setText(money(total))
+        # Walk-in customers pay in full: paid follows the total until the user edits it.
+        if self._is_walkin() and not self._paid_manual:
+            self._loading = True
+            self.paid.setValue(max(total, 0))
+            self._loading = False
+        self.balance_lbl.setText(money(total - self.paid.value()))
+        profit = d.profit()
+        self.profit_lbl.setVisible(self.show_profit.isChecked())
+        self.profit_lbl.setText(("Profit: " if profit >= 0 else "Loss: ") + money(abs(profit)))
+        self.profit_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: "
+                                      + ("#12803c" if profit >= 0 else "#d92d20"))
+        over = d.over_stock()
+        self.warn.setText("Not enough stock: " + ", ".join(f"{ln['name']} (have {ln['stock']:g})"
+                                                          for ln in over) if over else "")
+
+    # ================= save / edit =================
+    def _load_existing(self, invoice_id):
+        inv = self.db.one("SELECT * FROM invoices WHERE id=?", (invoice_id,))
+        if not inv or inv["status"] == "cancelled":
+            raise BusinessError("Invoice not found or cancelled")
+        self.customer.setCurrentIndex(max(self.customer.findData(inv["party_id"]), 0))
+        for it in self.db.query("SELECT * FROM invoice_items WHERE invoice_id=?", (invoice_id,)):
+            p = masters.search_products(self.db, str(it["product_id"]))[0]
+            p["stock"] += it["qty"]  # stock as it was before this invoice
+            ln = self.draft.add_product(p, it["serial"])
+            ln.update(qty=it["qty"], price=it["price"], discount=it["discount"])
+        self.disc.setValue(inv["discount"])
+        self._paid_manual = True
+        self.paid.setValue(inv["paid"])
+        self.note.setPlainText(inv["note"] or "")
+        self._refresh_table()
+
+    def _save(self, print_after: bool):
+        pid = self._party_id()
+        if not pid:
+            QMessageBox.warning(self, "Customer", "Please select a customer.")
+            return
+        try:
+            args = dict(items=self.draft.service_items(), discount=self.disc.value(),
+                        paid=self.paid.value(), note=self.note.toPlainText().strip())
+            if self.invoice_id:
+                trading.edit_invoice(self.db, self.invoice_id, pid, **args)
+                saved = self.invoice_id
+            else:
+                saved = trading.create_invoice(self.db, pid, **args)
+        except BusinessError as exc:
+            QMessageBox.warning(self, "Cannot save", str(exc))
+            return
+        self.last_saved_id = saved
+        no = self.db.scalar("SELECT no FROM invoices WHERE id=?", (saved,), "")
+        if print_after:
+            try:
+                print_invoice(self.db, saved, self.size.currentText())
+            except Exception as exc:  # printing problems must never lose the saved invoice
+                QMessageBox.warning(self, "Print", f"Invoice {no} was saved, but printing failed:\n{exc}")
+        else:
+            QMessageBox.information(self, "Saved", f"Invoice {no} saved.")
+        if self.invoice_id:
+            self.accept()
+        else:
+            self._reset_for_new()
+
+    def _reset_for_new(self):
+        self.draft = InvoiceDraft()
+        self._paid_manual = False
+        self.disc.setValue(0)
+        self.paid.setValue(0)
+        self.note.clear()
+        self.show_profit.setChecked(False)
+        self._load_customers()
+        self._refresh_table()
+        self.search.setFocus()

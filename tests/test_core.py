@@ -238,3 +238,48 @@ def test_product_edit_rejects_blank_name(shop):
     assert db.one("SELECT name FROM products WHERE id=?", (prod,))["name"] == "Samsung A15"
     masters.update_product(db, prod, name="Samsung A16", sale_price=55000)
     assert db.one("SELECT sale_price FROM products WHERE id=?", (prod,))["sale_price"] == 55000
+
+
+# ---------- invoice PDF ----------
+def test_invoice_pdf_a4_and_thermal(shop, tmp_path):
+    from app.reports.invoice_pdf import build_invoice_pdf
+    db, sup, cust, prod = _stocked(shop)
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 2, "price": 50000}],
+                                 discount=500, paid=20000, note="Warranty 1 year. شکریہ")
+    for size in ("A4", "80mm"):
+        out = build_invoice_pdf(db, inv, tmp_path / f"inv_{size}.pdf", size)
+        data = open(out, "rb").read()
+        assert data.startswith(b"%PDF") and len(data) > 1500
+
+
+def test_register_with_logo_creates_folder(tmp_path):
+    from PIL import Image
+    logo = tmp_path / "src.png"
+    Image.new("RGB", (50, 50), (10, 100, 200)).save(logo)
+    data = tmp_path / "data"
+    data.mkdir()
+    db = auth.register(data, "X Shop", "Addr", "03001234567", "a@b.com", str(logo), "u", PW, PW)
+    assert (data / "logo" / "logo.png").exists()
+    db.close()
+
+
+# ---------- invoice draft (screen logic) ----------
+def test_invoice_draft_totals_profit_and_stock_warning(shop):
+    from app.ui.invoice_model import InvoiceDraft
+    db, sup, cust, prod = _stocked(shop)
+    p = masters.search_products(db, "samsung")[0]
+    d = InvoiceDraft()
+    d.add_product(p)
+    d.add_product(p)                       # same product again -> qty 2, one line
+    assert len(d.lines) == 1 and d.lines[0]["qty"] == 2
+    d.lines[0]["price"] = 50000
+    d.lines[0]["discount"] = 1000
+    d.discount = 500
+    assert d.subtotal() == 99000 and d.total() == 98500
+    assert d.profit() == 98500 - 80000
+    assert d.over_stock() == []
+    d.lines[0]["qty"] = 11
+    assert len(d.over_stock()) == 1
+    d.lines[0]["qty"] = 2
+    inv = trading.create_invoice(db, cust, d.service_items(), discount=d.discount, paid=0)
+    assert trading.invoice_profit(db, inv) == d.profit()

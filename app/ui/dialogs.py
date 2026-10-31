@@ -69,6 +69,7 @@ class CompanyEditDialog(QDialog):
             if self.new_logo:
                 src = Path(self.new_logo)
                 logo_dest = str(Path(self.db.data_dir) / "logo" / f"logo{src.suffix.lower()}")
+                Path(logo_dest).parent.mkdir(parents=True, exist_ok=True)
                 if src.resolve() != Path(logo_dest).resolve():
                     shutil.copyfile(src, logo_dest)
             masters.update_company(self.db, self.name.text(), self.address.text(),

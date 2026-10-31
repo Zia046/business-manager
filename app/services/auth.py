@@ -79,6 +79,7 @@ def register(data_dir: Path, name, address, phone, email, logo_file, login_id,
         if src.suffix.lower() not in (".png", ".jpg", ".jpeg"):
             raise BusinessError("Logo must be a PNG or JPG file")
         dest = Path(data_dir) / "logo" / f"logo{src.suffix.lower()}"
+        dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
         logo_path = str(dest)
     db = Database(data_dir, password, create=True)
