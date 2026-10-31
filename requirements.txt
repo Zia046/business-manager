@@ -4,7 +4,9 @@ reportlab>=4.0
 Pillow>=10.0
 rapidfuzz>=3.5
 openpyxl>=3.1
-# Optional (preferred) true database encryption on Windows:
+# Urdu text on printed bills (joins letters, right-to-left):
+arabic-reshaper>=3.0
+python-bidi>=0.4.2
+# Optional (true database-level encryption on Windows). Without it the app uses its built-in
+# encrypted-file fallback, which is also secure:
 # sqlcipher3-binary
-pytest>=8.0
-pyinstaller>=6.0

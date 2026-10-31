@@ -25,15 +25,24 @@ def cash_book(db, date_from, date_to):
 
 
 def customer_ledger(db, party_id, date_from=None, date_to=None):
+    """Ledger of a customer or supplier. Also returns the balance at the start and end of the period."""
     party = db.one("SELECT * FROM parties WHERE id=?", (party_id,))
+    sign = 1 if party["kind"] == "customer" else -1  # supplier: credit increases the balance
     bal = party["opening_balance"]
+    period_opening, period_closing = bal, bal
     out = []
     for r in db.query("SELECT * FROM ledger WHERE party_id=? ORDER BY date, id", (party_id,)):
-        sign = 1 if party["kind"] == "customer" else -1  # supplier: credit increases balance
         bal += sign * (r["debit"] - r["credit"])
-        if (not date_from or r["date"] >= date_from + _START) and (not date_to or r["date"] <= date_to + _END):
-            out.append({**r, "balance": r2(bal)})
-    return {"party": party, "opening": party["opening_balance"], "rows": out, "closing": r2(bal)}
+        if date_from and r["date"] < date_from + _START:
+            period_opening = bal
+            period_closing = bal
+            continue
+        if date_to and r["date"] > date_to + _END:
+            continue
+        period_closing = bal
+        out.append({**r, "balance": r2(bal)})
+    return {"party": party, "opening": party["opening_balance"], "rows": out, "closing": r2(bal),
+            "period_opening": r2(period_opening), "period_closing": r2(period_closing)}
 
 
 def all_balances(db, kind="customer"):

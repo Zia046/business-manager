@@ -63,7 +63,10 @@ SHORTCUTS = {"sale_invoice": "F2", "stock_purchase": "F3", "cash_received": "F4"
 # Screens that are built (everything else shows a placeholder). Updated as steps finish.
 IMPLEMENTED = {"company_edit", "about", "change_password", "customers", "suppliers", "products", "sale_invoice",
                "stock_purchase", "cash_received", "pay_supplier", "pay_customer", "expenses",
-               "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return"}
+               "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return",
+               "customer_transactions", "cash_received_report", "profit_loss", "invoice_wise", "stock_position",
+               "product_ledger", "all_balances", "products_report", "outstanding", "sale_summary", "invoice_print",
+               "backup", "restore"}
 
 
 def all_keys():

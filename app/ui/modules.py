@@ -8,7 +8,9 @@ from ..config import APP_NAME
 from . import dialogs
 from .parties import PartiesWindow
 from .products import ProductsWindow
+from .report_screens import SCREENS
 from .returns_ui import ReturnDialog
+from .backup_ui import BackupDialog, restore_dialog
 from .account_screens import open_balance_sheet, open_cash_book, open_vouchers
 from .payments_ui import PaymentDialog
 from .sale_invoice import SaleInvoiceDialog
@@ -25,6 +27,8 @@ def _change_password(win):
 
 
 MODULES = {
+    "backup": lambda win: BackupDialog(win.db, win).exec(),
+    "restore": restore_dialog,
     "sale_return": lambda win: ReturnDialog(win.db, "sale", win).exec(),
     "purchase_return": lambda win: ReturnDialog(win.db, "purchase", win).exec(),
     "cash_book": open_cash_book,
@@ -43,6 +47,9 @@ MODULES = {
     "about": lambda win: dialogs.show_about(win, win.db),
     "change_password": _change_password,
 }
+
+
+MODULES.update(SCREENS)
 
 
 def open_module(win, key: str, label: str):

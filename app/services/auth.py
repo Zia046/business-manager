@@ -124,7 +124,19 @@ def login(data_dir: Path, login_id: str, password: str) -> Database:
         _save_lock(data_dir, st)
         raise BusinessError(GENERIC_ERROR)
     _save_lock(data_dir, {"attempts": 0, "until": 0})
+    _fix_logo_path(db, data_dir)
     return db
+
+
+def _fix_logo_path(db, data_dir: Path):
+    """After restoring a backup made on another computer/drive the stored logo path may be stale."""
+    co = db.one("SELECT logo_path FROM company WHERE id=1")
+    if co and co["logo_path"] and not Path(co["logo_path"]).exists():
+        local = Path(data_dir) / "logo" / Path(co["logo_path"]).name
+        if local.exists():
+            with db.transaction() as c:
+                c.execute("UPDATE company SET logo_path=? WHERE id=1", (str(local),))
+            write_branding(data_dir, db.one("SELECT name FROM company WHERE id=1")["name"], str(local))
 
 
 def change_credentials(db: Database, current_password: str, new_login_id: str,

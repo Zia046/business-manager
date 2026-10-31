@@ -2,22 +2,26 @@
 from pathlib import Path
 
 from PySide6.QtCore import QDate, Qt
-from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (QDateEdit, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+from PySide6.QtGui import QColor, QFont
+from PySide6.QtWidgets import (QComboBox, QCompleter, QDateEdit, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from ..reports import export
 from ..services import masters
 from .printing import open_file
+from .party_picker import combo_party_id, make_party_combo
 from .widgets import make_table
 
 
 class ReportWindow(QDialog):
     """`builder(db, date_from, date_to)` (or `builder(db)` when use_dates=False) returns a report dict."""
 
-    def __init__(self, db, builder, title, use_dates=True, actions=None, parent=None):
+    def __init__(self, db, builder, title, use_dates=True, actions=None, parent=None, filter_kind=None):
+        """filter_kind: None, 'customer', 'supplier' or 'product' - adds a picker; its id is passed
+        to the builder as the last argument."""
         super().__init__(parent)
-        self.db, self.builder, self.use_dates = db, builder, use_dates
+        self.db, self.builder, self.use_dates, self.filter_kind = db, builder, use_dates, filter_kind
+        self.filter_combo = None
         self.report = None
         self.setWindowTitle(title)
         self.resize(1050, 650)
@@ -37,6 +41,11 @@ class ReportWindow(QDialog):
             show = QPushButton("Show")
             show.clicked.connect(self.reload)
             top.addWidget(show)
+        if filter_kind:
+            top.addWidget(QLabel(filter_kind.title() + ":"))
+            self.filter_combo = self._make_filter_combo(filter_kind)
+            self.filter_combo.currentIndexChanged.connect(lambda *_: self.reload())
+            top.addWidget(self.filter_combo)
         self.search = QLineEdit(placeholderText="Search in this report...")
         self.search.textChanged.connect(self._render)
         top.addWidget(self.search, 1)
@@ -57,6 +66,26 @@ class ReportWindow(QDialog):
         lay.addWidget(self.summary)
         self.reload()
 
+    def _make_filter_combo(self, kind):
+        if kind in ("customer", "supplier"):
+            return make_party_combo(self.db, kind)
+        combo = QComboBox()
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.NoInsert)
+        combo.setMinimumWidth(320)
+        rows = self.db.query("SELECT id, name FROM products WHERE active=1 ORDER BY name LIMIT 5000")
+        for r in rows:
+            combo.addItem(f"{r['name']}  (ID {r['id']})", r["id"])
+        comp = QCompleter([combo.itemText(i) for i in range(combo.count())], combo)
+        comp.setCaseSensitivity(Qt.CaseInsensitive)
+        comp.setFilterMode(Qt.MatchContains)
+        combo.setCompleter(comp)
+        combo.setCurrentIndex(-1)
+        return combo
+
+    def _filter_id(self):
+        return combo_party_id(self.filter_combo) if self.filter_combo is not None else None
+
     def _range(self):
         return (self.d_from.date().toString("yyyy-MM-dd"), self.d_to.date().toString("yyyy-MM-dd"))
 
@@ -66,7 +95,8 @@ class ReportWindow(QDialog):
             if f > t:
                 QMessageBox.warning(self, "Dates", "'From' date is after 'To' date.")
                 return
-            self.report = self.builder(self.db, f, t)
+            args = (self._filter_id(),) if self.filter_kind else ()
+            self.report = self.builder(self.db, f, t, *args)
         else:
             self.report = self.builder(self.db)
         self._render()
@@ -78,8 +108,10 @@ class ReportWindow(QDialog):
         if not text:
             return rep
         keep = [i for i, r in enumerate(rep["rows"]) if i in rep["bold_rows"] or any(text in str(c).lower() for c in r)]
+        low = rep.get("low_rows", set())
         return {**rep, "rows": [rep["rows"][i] for i in keep],
-                "bold_rows": {n for n, i in enumerate(keep) if i in rep["bold_rows"]}}
+                "bold_rows": {n for n, i in enumerate(keep) if i in rep["bold_rows"]},
+                "low_rows": {n for n, i in enumerate(keep) if i in low}}
 
     def _render(self, *_):
         if not self.report:
@@ -100,6 +132,8 @@ class ReportWindow(QDialog):
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if r in rep["bold_rows"]:
                     it.setFont(bold)
+                if r in rep.get("low_rows", ()):
+                    it.setBackground(QColor("#fdecea"))  # low stock
                 t.setItem(r, c, it)
         t.resizeColumnsToContents()
         t.horizontalHeader().setStretchLastSection(True)
