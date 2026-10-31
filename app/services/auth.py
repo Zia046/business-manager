@@ -32,6 +32,22 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+BRANDING_FILE = "branding.json"
+
+
+def write_branding(data_dir: Path, name: str, logo_path: str | None):
+    """Company name + logo copy kept OUTSIDE the encrypted DB so the login screen can show them."""
+    (Path(data_dir) / BRANDING_FILE).write_text(
+        json.dumps({"name": name, "logo": logo_path}, ensure_ascii=False), encoding="utf-8")
+
+
+def read_branding(data_dir: Path) -> dict:
+    try:
+        return json.loads((Path(data_dir) / BRANDING_FILE).read_text(encoding="utf-8"))
+    except Exception:
+        return {"name": "", "logo": None}
+
+
 def is_registered(data_dir: Path) -> bool:
     return Database.exists(data_dir)
 
@@ -73,6 +89,7 @@ def register(data_dir: Path, name, address, phone, email, logo_file, login_id,
                   (login_id.strip(), hash_password(password)))
         # default customer used for cash sales
         c.execute("INSERT INTO parties(kind,name,is_walkin) VALUES('customer','Walk-in Customer',1)")
+    write_branding(data_dir, name.strip(), logo_path)
     return db
 
 

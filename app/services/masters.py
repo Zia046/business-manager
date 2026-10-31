@@ -131,6 +131,8 @@ def update_company(db, name, address, phone, email, logo_path=None):
             c.execute("UPDATE company SET logo_path=? WHERE id=1", (logo_path,))
         c.execute("UPDATE company SET name=?,address=?,phone=?,email=? WHERE id=1",
                   (name.strip(), address.strip(), phone.strip(), email.strip()))
+    from .auth import write_branding  # keep login-screen branding in sync
+    write_branding(db.data_dir, name.strip(), get_company(db)["logo_path"])
 
 
 __all__ = ["stock_qty"]

@@ -207,3 +207,14 @@ def test_serial_tracking(shop):
         trading.create_invoice(db, cust, [{"product_id": ph, "qty": 1, "price": 250000, "serial": "IMEI1"}])
     trading.cancel_invoice(db, inv)
     assert db.one("SELECT status FROM serials WHERE serial='IMEI1'")["status"] == "in_stock"
+
+
+# ---------- branding for the login screen ----------
+def test_branding_available_before_login(tmp_path):
+    from app.services.auth import read_branding
+    db = auth.register(tmp_path, "Burhan Nexus", "Main Road", "03001234567", "a@b.com",
+                       None, "admin", PW, PW)
+    assert read_branding(tmp_path)["name"] == "Burhan Nexus"
+    masters.update_company(db, "Burhan Nexus Mobiles", "Main Road", "03001234567", "a@b.com")
+    assert read_branding(tmp_path)["name"] == "Burhan Nexus Mobiles"
+    db.close()
