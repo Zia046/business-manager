@@ -218,3 +218,14 @@ def test_branding_available_before_login(tmp_path):
     masters.update_company(db, "Burhan Nexus Mobiles", "Main Road", "03001234567", "a@b.com")
     assert read_branding(tmp_path)["name"] == "Burhan Nexus Mobiles"
     db.close()
+
+
+# ---------- menu structure (matches the requested layout) ----------
+def test_menu_spec_matches_requirements():
+    from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
+    assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
+                                     "Account Transactions", "Reports", "Utilities"]
+    assert [len(i) for _, i in MENUS] == [4, 4, 4, 3, 9, 4]
+    assert len(HOME_BUTTONS) == 7
+    assert HOME_BUTTONS[0][0] == "Sale Invoice"
+    assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
