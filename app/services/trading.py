@@ -3,8 +3,38 @@
 Every function runs in ONE database transaction: if anything fails (e.g. not
 enough stock) nothing is saved, so stock, ledger and cash book stay in sync.
 """
+from . import imei
 from .common import (BusinessError, customer_balance, next_no, now, post_cash, post_ledger,
                      r2, stock_qty, supplier_balance, unpost)
+
+
+# =============== PHONES (IMEI) ===============
+def find_unit(c, p, i1, i2):
+    """Stock record of the phone that owns these IMEI number(s). The numbers typed must be exactly
+    the numbers of that one phone (a phone is never picked automatically: it is identified only by
+    what the user typed)."""
+    nums = [x for x in (i1, i2) if x]
+    marks = ",".join("?" * len(nums))
+    rows = c.execute(f"SELECT * FROM serials WHERE product_id=? AND (serial IN ({marks}) OR imei2 IN ({marks}))",
+                     (p["id"], *nums, *nums)).fetchall()
+    if not rows:
+        raise BusinessError(f"IMEI {i1} is not in the stock record of '{p['name']}'")
+    row = rows[0]
+    stored = {x for x in (row["serial"], row["imei2"]) if x}
+    if len(rows) > 1 or stored != set(nums):
+        raise BusinessError(f"The IMEI number(s) typed do not match the stock record of this phone "
+                            f"('{p['name']}', IMEI {row['serial']}"
+                            f"{' / ' + row['imei2'] if row['imei2'] else ''})")
+    return row
+
+
+def check_sale_unit(c, p, serial, serial2):
+    """The typed IMEI(s) must be a phone of this product that is in stock. Returns its stock record."""
+    i1, i2 = imei.unit(serial, serial2, p["imei_mode"])
+    row = find_unit(c, p, i1, i2)
+    if row["status"] != "in_stock":
+        raise BusinessError(f"This phone (IMEI {row['serial']}) is already sold")
+    return row
 
 
 # =============== SALE INVOICE ===============
@@ -19,6 +49,8 @@ def _post_invoice(c, inv_id, no, date, party, items, discount, paid, note, allow
         p = c.execute("SELECT * FROM products WHERE id=?", (it["product_id"],)).fetchone()
         if not p:
             raise BusinessError("Product not found")
+        if p["track_serial"] and qty != 1:
+            raise BusinessError(f"'{p['name']}': sell each phone on its own line with its IMEI")
         if not allow_negative_stock and qty > stock_qty(c, p["id"]):
             raise BusinessError(f"Not enough stock for '{p['name']}' "
                                 f"(available {stock_qty(c, p['id']):g})")
@@ -27,17 +59,20 @@ def _post_invoice(c, inv_id, no, date, party, items, discount, paid, note, allow
             raise BusinessError("Line discount is larger than the line amount")
         subtotal += line
         cost_total += qty * p["avg_cost"]
-        c.execute("INSERT INTO invoice_items(invoice_id,product_id,qty,price,discount,unit_cost,serial)"
-                  " VALUES(?,?,?,?,?,?,?)",
-                  (inv_id, p["id"], qty, price, disc, p["avg_cost"], it.get("serial")))
+        unit_row = None
+        if p["track_serial"]:   # a phone: sold one at a time, identified by the IMEI typed on the invoice
+            if qty != 1:
+                raise BusinessError(f"'{p['name']}': sell each phone on its own line with its IMEI")
+            unit_row = check_sale_unit(c, p, it.get("serial"), it.get("serial2"))
+        c.execute("INSERT INTO invoice_items(invoice_id,product_id,qty,price,discount,unit_cost,serial,serial2)"
+                  " VALUES(?,?,?,?,?,?,?,?)",
+                  (inv_id, p["id"], qty, price, disc, p["avg_cost"],
+                   unit_row["serial"] if unit_row else it.get("serial"),
+                   unit_row["imei2"] if unit_row else None))
         c.execute("INSERT INTO stock_moves(product_id,date,qty,unit_cost,ref_type,ref_id) "
                   "VALUES(?,?,?,?,'invoice',?)", (p["id"], date, -qty, p["avg_cost"], inv_id))
-        if p["track_serial"] and it.get("serial"):
-            s = c.execute("SELECT * FROM serials WHERE serial=? AND product_id=?",
-                          (it["serial"], p["id"])).fetchone()
-            if not s or s["status"] != "in_stock":
-                raise BusinessError(f"Serial/IMEI {it['serial']} is not available")
-            c.execute("UPDATE serials SET status='sold', invoice_id=? WHERE id=?", (inv_id, s["id"]))
+        if unit_row:
+            c.execute("UPDATE serials SET status='sold', invoice_id=? WHERE id=?", (inv_id, unit_row["id"]))
     discount = float(discount or 0)
     total = r2(subtotal - discount)
     if discount < 0 or total < 0:
@@ -144,12 +179,20 @@ def create_purchase(db, supplier_id, items, paid=0.0, note="", date=None) -> int
                       (pid, p["id"], qty, price, None))
             c.execute("INSERT INTO stock_moves(product_id,date,qty,unit_cost,ref_type,ref_id) "
                       "VALUES(?,?,?,?,'purchase',?)", (p["id"], date, qty, price, pid))
-            for sn in it.get("serials", []) if p["track_serial"] else []:
-                try:
-                    c.execute("INSERT INTO serials(product_id,serial,purchase_id) VALUES(?,?,?)",
-                              (p["id"], sn.strip(), pid))
-                except Exception:
-                    raise BusinessError(f"Serial/IMEI {sn} already exists")
+            if p["track_serial"]:
+                if qty != int(qty):
+                    raise BusinessError("Phones are bought in whole numbers")
+                raw = it.get("serials") or []
+                if len(raw) != int(qty):
+                    raise BusinessError(f"'{p['name']}': enter the IMEI of every phone "
+                                        f"({int(qty)} phones, {len(raw)} IMEI entries)")
+                for r in raw:
+                    i1, i2 = imei.as_unit(r, p["imei_mode"])
+                    for x in (i1, i2):
+                        if x and c.execute("SELECT 1 FROM serials WHERE serial=? OR imei2=?", (x, x)).fetchone():
+                            raise BusinessError(f"IMEI {x} already exists in the stock")
+                    c.execute("INSERT INTO serials(product_id,serial,imei2,purchase_id) VALUES(?,?,?,?)",
+                              (p["id"], i1, i2, pid))
             total += qty * price
         total, paid = r2(total), r2(paid)
         if paid < 0 or paid > total:
@@ -169,12 +212,13 @@ def returnable_items(db_or_conn, kind: str, doc_id: int):
     conn = getattr(db_or_conn, "conn", db_or_conn)
     if kind == "sale":
         rows = conn.execute(
-            "SELECT ii.product_id, p.name, SUM(ii.qty) AS qty, "
+            "SELECT ii.product_id, p.name, p.track_serial, p.imei_mode, SUM(ii.qty) AS qty, "
             "SUM(ii.qty*ii.price-ii.discount)/SUM(ii.qty) AS price FROM invoice_items ii "
             "JOIN products p ON p.id=ii.product_id WHERE ii.invoice_id=? GROUP BY ii.product_id", (doc_id,)).fetchall()
     else:
         rows = conn.execute(
-            "SELECT pi.product_id, p.name, SUM(pi.qty) AS qty, SUM(pi.qty*pi.price)/SUM(pi.qty) AS price "
+            "SELECT pi.product_id, p.name, p.track_serial, p.imei_mode, SUM(pi.qty) AS qty, "
+            "SUM(pi.qty*pi.price)/SUM(pi.qty) AS price "
             "FROM purchase_items pi JOIN products p ON p.id=pi.product_id WHERE pi.purchase_id=? "
             "GROUP BY pi.product_id", (doc_id,)).fetchall()
     out = []
@@ -183,7 +227,8 @@ def returnable_items(db_or_conn, kind: str, doc_id: int):
                             "WHERE rt.ref_doc_id=? AND rt.kind=? AND ri.product_id=?",
                             (doc_id, kind, r["product_id"])).fetchone()["q"]
         out.append({"product_id": r["product_id"], "name": r["name"], "sold_qty": r["qty"], "returned_qty": done,
-                    "remaining": r["qty"] - done, "price": round(r["price"], 2)})
+                    "remaining": r["qty"] - done, "price": round(r["price"], 2),
+                    "track_serial": r["track_serial"], "imei_mode": r["imei_mode"]})
     return out
 
 
@@ -215,6 +260,19 @@ def sale_return(db, party_id, items, refunded=0.0, ref_invoice_id=None, note="",
             if cost is None:
                 cost = c.execute("SELECT avg_cost FROM products WHERE id=?",
                                  (it["product_id"],)).fetchone()["avg_cost"]
+            p = c.execute("SELECT * FROM products WHERE id=?", (it["product_id"],)).fetchone()
+            if not p:
+                raise BusinessError("Product not found")
+            if p["track_serial"]:   # a returned phone must be identified by its IMEI
+                if qty != 1:
+                    raise BusinessError(f"'{p['name']}': return phones one by one with their IMEI")
+                i1, i2 = imei.unit(it.get("serial"), it.get("serial2"), p["imei_mode"])
+                row = find_unit(c, p, i1, i2)
+                if row["status"] != "sold":
+                    raise BusinessError(f"This phone (IMEI {row['serial']}) was not sold, so it cannot be returned")
+                if ref_invoice_id and row["invoice_id"] != ref_invoice_id:
+                    raise BusinessError(f"This phone (IMEI {row['serial']}) is not on the selected invoice")
+                c.execute("UPDATE serials SET status='in_stock', invoice_id=NULL WHERE id=?", (row["id"],))
             c.execute("INSERT INTO return_items(return_id,product_id,qty,price,unit_cost) VALUES(?,?,?,?,?)",
                       (rid, it["product_id"], qty, price, cost))
             if ref_invoice_id:
@@ -265,6 +323,17 @@ def purchase_return(db, supplier_id, items, received=0.0, ref_purchase_id=None, 
                 if qty > left[p["id"]]:
                     raise BusinessError(f"Return quantity of '{p['name']}' is more than bought "
                                         f"(only {left[p['id']]:g} can still be returned)")
+            if p["track_serial"]:   # a phone goes back to the supplier: identified by its IMEI, leaves the stock
+                if qty != 1:
+                    raise BusinessError(f"'{p['name']}': return phones one by one with their IMEI")
+                i1, i2 = imei.unit(it.get("serial"), it.get("serial2"), p["imei_mode"])
+                row = find_unit(c, p, i1, i2)
+                if row["status"] != "in_stock":
+                    raise BusinessError(f"This phone (IMEI {row['serial']}) is sold, it cannot be returned "
+                                        "to the supplier")
+                if ref_purchase_id and row["purchase_id"] != ref_purchase_id:
+                    raise BusinessError(f"This phone (IMEI {row['serial']}) is not on the selected purchase")
+                c.execute("DELETE FROM serials WHERE id=?", (row["id"],))
             c.execute("INSERT INTO return_items(return_id,product_id,qty,price,unit_cost) VALUES(?,?,?,?,?)",
                       (rid, p["id"], qty, price, p["avg_cost"]))
             c.execute("INSERT INTO stock_moves(product_id,date,qty,unit_cost,ref_type,ref_id) "

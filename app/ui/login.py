@@ -35,11 +35,26 @@ class LoginDialog(QDialog):
         sub.setObjectName("subtitle")
         lay.addWidget(sub)
 
-        self.login_id = QLineEdit(placeholderText="Login ID")
+        remembered = brand.get("login_id")
+        self.login_id = QLineEdit(remembered or "", placeholderText="Login ID")
         self.password = QLineEdit(placeholderText="Password")
         self.password.setEchoMode(QLineEdit.Password)
-        lay.addWidget(self.login_id)
-        lay.addWidget(self.password)
+        if remembered:
+            # the Login ID is remembered: only the password is asked each time
+            self.who = QLabel(f"Login ID:  <b>{remembered}</b>", alignment=Qt.AlignCenter)
+            lay.addWidget(self.who)
+            self.login_id.hide()
+            self.other = QPushButton("Login with a different Login ID")
+            self.other.setObjectName("secondary")
+            self.other.setFlat(True)
+            self.other.setAutoDefault(False)
+            self.other.clicked.connect(self._show_login_id)
+            lay.addWidget(self.login_id)
+            lay.addWidget(self.password)
+            lay.addWidget(self.other)
+        else:
+            lay.addWidget(self.login_id)
+            lay.addWidget(self.password)
 
         self.error = QLabel("", alignment=Qt.AlignCenter)
         self.error.setObjectName("error")
@@ -52,6 +67,14 @@ class LoginDialog(QDialog):
         lay.addWidget(self.btn)
         self.login_id.returnPressed.connect(self.password.setFocus)
         self.password.returnPressed.connect(self.try_login)
+        (self.password if remembered else self.login_id).setFocus()
+
+    def _show_login_id(self):
+        self.who.hide()
+        self.other.hide()
+        self.login_id.show()
+        self.login_id.selectAll()
+        self.login_id.setFocus()
 
     def try_login(self):
         self.error.setText("")

@@ -44,7 +44,8 @@ CREATE TABLE products (
     sale_price REAL NOT NULL DEFAULT 0,
     opening_stock REAL NOT NULL DEFAULT 0,
     low_stock_level REAL NOT NULL DEFAULT 0,
-    track_serial INTEGER NOT NULL DEFAULT 0,        -- IMEI / serial numbers
+    track_serial INTEGER NOT NULL DEFAULT 0,        -- 1 for mobile phones (IMEI tracked)
+    imei_mode TEXT NOT NULL DEFAULT 'single',       -- 'single' or 'double' IMEI phone
     active INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX idx_products_name ON products(name);
@@ -52,7 +53,8 @@ CREATE INDEX idx_products_name ON products(name);
 CREATE TABLE serials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL REFERENCES products(id),
-    serial TEXT NOT NULL UNIQUE,
+    serial TEXT NOT NULL UNIQUE,                    -- IMEI 1
+    imei2 TEXT,                                     -- IMEI 2 (double-IMEI phones)
     status TEXT NOT NULL DEFAULT 'in_stock' CHECK (status IN ('in_stock','sold')),
     purchase_id INTEGER, invoice_id INTEGER
 );
@@ -78,7 +80,7 @@ CREATE TABLE invoice_items (
     invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     product_id INTEGER NOT NULL REFERENCES products(id),
     qty REAL NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0,
-    unit_cost REAL NOT NULL DEFAULT 0, serial TEXT
+    unit_cost REAL NOT NULL DEFAULT 0, serial TEXT, serial2 TEXT
 );
 
 CREATE TABLE purchases (
@@ -158,4 +160,36 @@ CREATE TABLE vouchers (
     date TEXT NOT NULL, party_id INTEGER REFERENCES parties(id),
     amount REAL NOT NULL, ref_type TEXT, ref_id INTEGER, note TEXT
 );
+
+CREATE TABLE categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    is_mobile INTEGER NOT NULL DEFAULT 0,           -- 1 = phones: IMEI numbers are compulsory
+    is_system INTEGER NOT NULL DEFAULT 0            -- 1 = cannot be deleted
+);
+INSERT INTO categories(name,is_mobile,is_system) VALUES
+    ('Mobile Phone',1,1),('Accessories',0,0),('Contagious',0,0),('Disposable',0,0),('Other',0,1);
+CREATE UNIQUE INDEX idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL;
 """
+
+SCHEMA_VERSION = 2
+
+
+def migrate(conn):
+    """Bring a database made by an older version up to date. Safe to run many times."""
+    def cols(table):
+        return {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+    for table, col, ddl in (("products", "imei_mode", "TEXT NOT NULL DEFAULT 'single'"),
+                            ("serials", "imei2", "TEXT"),
+                            ("invoice_items", "serial2", "TEXT")):
+        if col not in cols(table):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+    conn.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                 "name TEXT NOT NULL UNIQUE COLLATE NOCASE, is_mobile INTEGER NOT NULL DEFAULT 0, "
+                 "is_system INTEGER NOT NULL DEFAULT 0)")
+    if conn.execute("SELECT COUNT(*) AS n FROM categories").fetchone()["n"] == 0:
+        conn.execute("INSERT INTO categories(name,is_mobile,is_system) VALUES "
+                     "('Mobile Phone',1,1),('Accessories',0,0),('Contagious',0,0),('Disposable',0,0),('Other',0,1)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL")
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

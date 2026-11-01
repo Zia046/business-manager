@@ -82,7 +82,8 @@ def vouchers_report(db, date_from, date_to):
 # ======================= more reports =======================
 _LEDGER_LABELS = {"invoice": "Sale", "purchase": "Purchase", "receipt": "Cash received", "payment": "Payment",
                   "customer_payment": "Paid to customer", "sale_return": "Sale return",
-                  "purchase_return": "Purchase return"}
+                  "purchase_return": "Purchase return",
+                  "adjustment": "Balance cleared"}
 
 
 def _ledger_desc(r):
@@ -216,19 +217,15 @@ def all_customer_balance_report(db):
 
 
 def outstanding_report(db):
-    """Outstanding / Baqayajat: customers (they owe us) and suppliers (we owe them)."""
-    rep = _new("Outstanding / Baqayajat", "Pending balances", ["ID", "Name", "Phone", "Balance"], (3,))
-    for title, kind, tot_label in (("CUSTOMERS - they owe us", "customer", "TOTAL TO RECEIVE"),
-                                   ("SUPPLIERS - we owe them", "supplier", "TOTAL TO PAY")):
-        b = R.all_balances(db, kind)
-        rep["rows"].append(["", title, "", ""])
-        rep["bold_rows"].add(len(rep["rows"]) - 1)
-        for r in b["rows"]:
-            rep["rows"].append([r["id"], r["name"], r["phone"] or "", money(r["balance"])])
-        rep["rows"].append(["", tot_label, "", money(b["total"])])
-        rep["bold_rows"].add(len(rep["rows"]) - 1)
-        rep["rows"].append(["", "", "", ""])
-        rep["summary"].append((tot_label.title(), money(b["total"])))
+    """Outstanding / Baqayajat: ONLY customers who still owe us money. Suppliers, wholesalers and
+    dealers are not listed (purchases are always saved as fully paid)."""
+    b = R.all_balances(db, "customer")
+    rep = _new("Outstanding / Baqayajat", "Customers who have to pay", ["ID", "Customer", "Phone", "Balance"], (3,))
+    for r in b["rows"]:
+        rep["rows"].append([r["id"], r["name"], r["phone"] or "", money(r["balance"])])
+    rep["rows"].append(["", "TOTAL TO RECEIVE", "", money(b["total"])])
+    rep["bold_rows"].add(len(rep["rows"]) - 1)
+    rep["summary"] = [("Customers", str(len(b["rows"]))), ("Total to receive", money(b["total"]))]
     return rep
 
 

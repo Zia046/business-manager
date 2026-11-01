@@ -22,7 +22,8 @@ def shop(env):
     _, db = env
     sup = masters.add_party(db, "supplier", "Phone Supplier")
     cust = masters.add_party(db, "customer", "Ali")
-    prod = masters.add_product(db, "Samsung A15", sale_price=50000, purchase_price=0, tags="#mobile")
+    prod = masters.add_product(db, "Samsung A15", sale_price=50000, purchase_price=0, tags="#mobile",
+                               category="Other")
     return db, sup, cust, prod
 
 
@@ -196,19 +197,6 @@ def test_soft_delete_when_used(shop):
     assert masters.delete_party(db, unused) == "deleted"
 
 
-def test_serial_tracking(shop):
-    db, sup, cust, _ = shop
-    ph = masters.add_product(db, "iPhone 14", sale_price=250000, track_serial=True)
-    trading.create_purchase(db, sup, [{"product_id": ph, "qty": 2, "price": 200000,
-                                       "serials": ["IMEI1", "IMEI2"]}])
-    inv = trading.create_invoice(db, cust, [{"product_id": ph, "qty": 1, "price": 250000, "serial": "IMEI1"}],
-                                 paid=250000)
-    with pytest.raises(BusinessError, match="not available"):
-        trading.create_invoice(db, cust, [{"product_id": ph, "qty": 1, "price": 250000, "serial": "IMEI1"}])
-    trading.cancel_invoice(db, inv)
-    assert db.one("SELECT status FROM serials WHERE serial='IMEI1'")["status"] == "in_stock"
-
-
 # ---------- branding for the login screen ----------
 def test_branding_available_before_login(tmp_path):
     from app.services.auth import read_branding
@@ -308,9 +296,9 @@ def test_purchase_draft_requires_typed_price(shop):
     assert d.total() == 123000 and not d.missing_prices()
     pid = trading.create_purchase(db, sup, d.service_items(), paid=23000)
     assert supplier_balance(db.conn, sup) == 100000 and stock_qty(db.conn, prod) == 3
-    ph = masters.add_product(db, "iPhone 15", track_serial=True)
+    ph = masters.add_product(db, "iPhone 15", category="Mobile Phone", imei_mode="single")
     d2 = PurchaseDraft()
-    l2 = d2.add_product(masters.search_products(db, "iphone")[0], ["A1", "A2"])
+    l2 = d2.add_product(masters.search_products(db, "iphone")[0], [("111111111111111", None), ("222222222222222", None)])
     assert l2["qty"] == 2 and not d2.serial_mismatch()
     l2["qty"] = 3
     assert len(d2.serial_mismatch()) == 1
@@ -355,7 +343,7 @@ def test_returnable_items_and_purchase_return_limit(shop):
     trading.purchase_return(db, sup, [{"product_id": prod, "qty": 2, "price": 40000}], ref_purchase_id=pur)
     assert stock_qty(db.conn, prod) == 10 - 4 + 1 - 2
     # a product with big opening stock: stock is fine, but the return exceeds what this purchase bought
-    big = masters.add_product(db, "USB Cable", opening_stock=20)
+    big = masters.add_product(db, "USB Cable", opening_stock=20, category="Accessories")
     p2 = trading.create_purchase(db, sup, [{"product_id": big, "qty": 3, "price": 100}])
     with pytest.raises(BusinessError, match="more than bought"):
         trading.purchase_return(db, sup, [{"product_id": big, "qty": 5, "price": 100}], ref_purchase_id=p2)
@@ -404,7 +392,8 @@ def test_all_report_builders(shop):
     assert pled["rows"][-1][-1] == "8" and pled["summary"] == [("Current stock", "8")]
     assert B.all_customer_balance_report(db)["summary"][1] == ("Total", "60,000.00")
     out = B.outstanding_report(db)
-    assert ("Total To Receive", "60,000.00") in out["summary"] and ("Total To Pay", "400,000.00") in out["summary"]
+    assert out["summary"] == [("Customers", "1"), ("Total to receive", "60,000.00")]
+    assert not any("supplier" in str(r).lower() for r in out["rows"])        # suppliers are never listed
     assert B.sale_summary_report(db, f, t)["summary"] == [("Total sales", "100,000.00")]
     assert B.products_report(db)["summary"] == [("Products", "1")]
     il = B.invoice_list_report(db, f, t)
@@ -516,3 +505,257 @@ def test_restore_rejects_bad_files_and_auto_backup(tmp_path):
     assert backup.auto_backup_on_exit(db) is None
     assert len(backup.list_backups(data)) == 1
     db.close()
+
+
+# ================= phones, IMEI, categories =================
+I1, I2, I3, I4 = "356938035643809", "356938035643817", "490154203237518", "490154203237526"
+
+
+@pytest.fixture
+def phones(shop):
+    db, sup, cust, _ = shop
+    single = masters.add_product(db, "Nokia 105", sale_price=5000, category="Mobile Phone", imei_mode="single")
+    double = masters.add_product(db, "Samsung A55", sale_price=90000, category="Mobile Phone", imei_mode="double")
+    trading.create_purchase(db, sup, [
+        {"product_id": single, "qty": 2, "price": 4000, "serials": [I1, "111111111111111"]},
+        {"product_id": double, "qty": 1, "price": 80000, "serials": [(I3, I4)]}])
+    return db, sup, cust, single, double
+
+
+def test_imei_rules():
+    from app.services import imei
+    assert imei.unit(" " + I1 + " ", None, "single") == (I1, None)
+    for bad in ("12345", "1234567890a", "", "1" * 101):
+        with pytest.raises(BusinessError):
+            imei.unit(bad, None, "single")
+    assert imei.unit("1" * 10, None, "single") and imei.unit("1" * 100, None, "single")   # 10 and 100 digits are fine
+    with pytest.raises(BusinessError, match="cannot be the same"):
+        imei.unit(I1, I1, "double")
+    with pytest.raises(BusinessError, match="IMEI 2 is required"):
+        imei.unit(I1, "", "double")
+    with pytest.raises(BusinessError, match="single IMEI"):
+        imei.unit(I1, I2, "single")
+    assert imei.parse_lines(f"{I1}\n\n{I2}\n", "single") == [(I1, None), (I2, None)]
+    assert imei.parse_lines(f"{I1} {I2}\n{I3},{I4}", "double") == [(I1, I2), (I3, I4)]
+    with pytest.raises(BusinessError, match="Line 2"):
+        imei.parse_lines(f"{I1} {I2}\n{I3}", "double")
+    with pytest.raises(BusinessError, match="typed twice"):
+        imei.parse_lines(f"{I1}\n{I1}", "single")
+
+
+def test_category_rules(shop):
+    db, *_ = shop
+    names = [c["name"] for c in masters.list_categories(db)]
+    assert names == ["Mobile Phone", "Accessories", "Contagious", "Disposable", "Other"]
+    with pytest.raises(BusinessError, match="category"):
+        masters.add_product(db, "No Category")
+    with pytest.raises(BusinessError, match="category"):
+        masters.add_product(db, "Bad Category", category="Weapons")
+    with pytest.raises(BusinessError, match="single or double"):
+        masters.add_product(db, "Phone", category="Mobile Phone", imei_mode="")
+    with pytest.raises(BusinessError, match="opening stock"):
+        masters.add_product(db, "Phone", category="Mobile Phone", imei_mode="single", opening_stock=3)
+    pid = masters.add_product(db, "Phone", category="mobile phone", imei_mode="double")
+    p = db.one("SELECT * FROM products WHERE id=?", (pid,))
+    assert p["track_serial"] == 1 and p["imei_mode"] == "double" and p["category"] == "Mobile Phone"
+    acc = masters.add_product(db, "Cable", category="Accessories", imei_mode="double")
+    assert db.one("SELECT track_serial, imei_mode FROM products WHERE id=?", (acc,)) == {"track_serial": 0, "imei_mode": "single"}
+    new = masters.add_category(db, "Chargers")
+    with pytest.raises(BusinessError, match="already exists"):
+        masters.add_category(db, "chargers")
+    masters.update_product(db, acc, category="Chargers")
+    with pytest.raises(BusinessError, match=r"product\(s\) use"):
+        masters.delete_category(db, new)                         # in use
+    masters.update_product(db, acc, category="Other")
+    masters.delete_category(db, new)
+    system = [c for c in masters.list_categories(db) if c["name"] == "Mobile Phone"][0]
+    with pytest.raises(BusinessError, match="built-in"):
+        masters.delete_category(db, system["id"])
+    with pytest.raises(BusinessError, match="Select a category"):
+        masters.update_product(db, acc, category="")
+
+
+def test_phone_purchase_requires_every_imei_and_no_duplicates(phones):
+    db, sup, cust, single, double = phones
+    assert stock_qty(db.conn, single) == 2 and stock_qty(db.conn, double) == 1
+    with pytest.raises(BusinessError, match="IMEI of every phone"):
+        trading.create_purchase(db, sup, [{"product_id": single, "qty": 2, "price": 1, "serials": [I2]}])
+    with pytest.raises(BusinessError, match="IMEI of every phone"):
+        trading.create_purchase(db, sup, [{"product_id": single, "qty": 1, "price": 1}])      # no IMEI at all
+    with pytest.raises(BusinessError, match="already exists"):
+        trading.create_purchase(db, sup, [{"product_id": single, "qty": 1, "price": 1, "serials": [I1]}])
+    with pytest.raises(BusinessError, match="already exists"):    # I3 is IMEI 1 of the double phone
+        trading.create_purchase(db, sup, [{"product_id": single, "qty": 1, "price": 1, "serials": [I3]}])
+    with pytest.raises(BusinessError, match="already exists"):    # I4 is IMEI 2 of the double phone
+        trading.create_purchase(db, sup, [{"product_id": double, "qty": 1, "price": 1, "serials": [(I2, I4)]}])
+    with pytest.raises(BusinessError, match="cannot be the same"):
+        trading.create_purchase(db, sup, [{"product_id": double, "qty": 1, "price": 1, "serials": [(I2, I2)]}])
+    with pytest.raises(BusinessError, match="at least 10|between 10"):
+        trading.create_purchase(db, sup, [{"product_id": single, "qty": 1, "price": 1, "serials": ["12345"]}])
+    assert stock_qty(db.conn, single) == 2 and db.scalar("SELECT COUNT(*) FROM serials") == 3   # nothing half-saved
+
+
+def test_phone_sale_needs_typed_imei_and_prints_both(phones):
+    db, sup, cust, single, double = phones
+    with pytest.raises(BusinessError, match="IMEI is required"):          # never picked automatically
+        trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 5000}], paid=5000)
+    with pytest.raises(BusinessError, match="not in the stock record"):
+        trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 5000, "serial": I2}], paid=5000)
+    with pytest.raises(BusinessError, match="IMEI 2 is required"):
+        trading.create_invoice(db, cust, [{"product_id": double, "qty": 1, "price": 90000, "serial": I3}], paid=90000)
+    with pytest.raises(BusinessError, match="do not match"):
+        trading.create_invoice(db, cust, [{"product_id": double, "qty": 1, "price": 90000,
+                                           "serial": I3, "serial2": I2}], paid=90000)
+    inv = trading.create_invoice(db, cust, [
+        {"product_id": single, "qty": 1, "price": 5000, "serial": I1},
+        {"product_id": double, "qty": 1, "price": 90000, "serial": I4, "serial2": I3}], paid=95000)   # swapped order is fine
+    from app.services import reports as R
+    items = {i["product_id"]: i for i in R.invoice_detail(db, inv)["items"]}
+    assert (items[single]["serial"], items[single]["serial2"]) == (I1, None)
+    assert (items[double]["serial"], items[double]["serial2"]) == (I3, I4)       # both IMEIs go on the bill
+    with pytest.raises(BusinessError, match="already sold"):
+        trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 5000, "serial": I1}], paid=5000)
+    with pytest.raises(BusinessError, match="own line"):
+        trading.create_invoice(db, cust, [{"product_id": single, "qty": 2, "price": 5000, "serial": "111111111111111"}], paid=0)
+    trading.cancel_invoice(db, inv)
+    assert db.scalar("SELECT COUNT(*) FROM serials WHERE status='in_stock'") == 3
+
+
+def test_same_imei_twice_on_one_invoice_rejected(phones):
+    db, sup, cust, single, double = phones
+    with pytest.raises(BusinessError, match="already sold"):
+        trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 1, "serial": I1},
+                                          {"product_id": single, "qty": 1, "price": 1, "serial": I1}], paid=0)
+    assert stock_qty(db.conn, single) == 2
+
+
+def test_phone_return_by_imei(phones):
+    db, sup, cust, single, double = phones
+    inv = trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 5000, "serial": I1}], paid=0)
+    with pytest.raises(BusinessError, match="IMEI is required"):
+        trading.sale_return(db, cust, [{"product_id": single, "qty": 1, "price": 5000}], ref_invoice_id=inv)
+    with pytest.raises(BusinessError, match="was not sold"):
+        trading.sale_return(db, cust, [{"product_id": single, "qty": 1, "price": 5000,
+                                        "serial": "111111111111111"}], ref_invoice_id=inv)
+    trading.sale_return(db, cust, [{"product_id": single, "qty": 1, "price": 5000, "serial": I1}], ref_invoice_id=inv)
+    assert db.one("SELECT status FROM serials WHERE serial=?", (I1,))["status"] == "in_stock"
+    assert stock_qty(db.conn, single) == 2
+    # back to the supplier: the phone leaves the stock records completely
+    trading.purchase_return(db, sup, [{"product_id": double, "qty": 1, "price": 80000, "serial": I3, "serial2": I4}])
+    assert db.scalar("SELECT COUNT(*) FROM serials WHERE serial=?", (I3,)) == 0 and stock_qty(db.conn, double) == 0
+
+
+def test_migration_from_old_database():
+    import sqlite3
+    from app.db.connection import _dict_factory
+    from app.db.schema import migrate
+    conn = sqlite3.connect(":memory:", isolation_level=None)
+    conn.row_factory = _dict_factory
+    conn.executescript("""
+        CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, track_serial INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE serials (id INTEGER PRIMARY KEY, product_id INTEGER, serial TEXT NOT NULL UNIQUE);
+        CREATE TABLE invoice_items (id INTEGER PRIMARY KEY, serial TEXT);
+        INSERT INTO products(name) VALUES ('Old product');
+        INSERT INTO serials(product_id, serial) VALUES (1, '123456789012345');""")
+    migrate(conn)
+    migrate(conn)                                              # running twice is harmless
+    assert conn.execute("SELECT imei_mode FROM products").fetchone()["imei_mode"] == "single"
+    assert conn.execute("SELECT imei2 FROM serials").fetchone()["imei2"] is None
+    assert conn.execute("SELECT serial2 FROM invoice_items").fetchall() == []
+    assert conn.execute("SELECT COUNT(*) AS n FROM categories").fetchone()["n"] == 5
+    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 2
+
+
+def test_old_database_file_opens_and_upgrades(tmp_path):
+    """A real encrypted DB whose categories table/columns are missing gets upgraded when opened."""
+    db = auth.register(tmp_path, "Shop", "A", "03001234567", "a@b.com", None, "admin", PW, PW)
+    db.conn.execute("DROP TABLE categories")
+    db.conn.execute("PRAGMA user_version = 0")
+    db._persist()
+    db.close()
+    db2 = auth.login(tmp_path, "admin", PW)
+    assert len(masters.list_categories(db2)) == 5
+    db2.close()
+
+
+def test_phone_bill_pdf_contains_both_imeis(phones, tmp_path):
+    from app.reports.invoice_pdf import build_invoice_pdf
+    db, sup, cust, single, double = phones
+    inv = trading.create_invoice(db, cust, [{"product_id": double, "qty": 1, "price": 90000, "serial": I3,
+                                             "serial2": I4}], paid=90000)
+    for size in ("A4", "80mm"):
+        out = build_invoice_pdf(db, inv, tmp_path / f"{size}.pdf", size)
+        import subprocess
+        text = subprocess.run(["pdftotext", out, "-"], capture_output=True, text=True).stdout
+        assert I3 in text and I4 in text and "IMEI 1" in text and "IMEI 2" in text, size
+
+
+# ================= reset database =================
+def test_reset_needs_reason_password_and_selection(env):
+    path, db = env
+    with pytest.raises(BusinessError, match="Select what"):
+        reset_mod().reset_data(db, PW, "testing the reset", [])
+    with pytest.raises(BusinessError, match="reason"):
+        reset_mod().reset_data(db, PW, "  ", ["transactions"])
+    with pytest.raises(BusinessError, match="reason"):
+        reset_mod().reset_data(db, PW, "abc", ["transactions"])
+    with pytest.raises(BusinessError, match="password is incorrect"):
+        reset_mod().reset_data(db, "wrong-password", "testing the reset", ["transactions"])
+    assert not (path / "reset_log.txt").exists()                  # nothing happened
+
+
+def reset_mod():
+    from app.services import reset
+    return reset
+
+
+def test_reset_transactions_keeps_accounts_and_products(shop):
+    db, sup, cust, prod = _stocked(shop)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 2, "price": 50000}], paid=1000)
+    payments.add_expense(db, "Rent", 500)
+    r = reset_mod().reset_data(db, PW, "start fresh after testing", ["transactions"])
+    assert r["safety"].exists() and not r["factory"]
+    assert db.scalar("SELECT COUNT(*) FROM invoices") == 0 and db.scalar("SELECT COUNT(*) FROM cash_book") == 0
+    assert db.scalar("SELECT COUNT(*) FROM products") == 1 and db.scalar("SELECT COUNT(*) FROM parties") == 3
+    assert stock_qty(db.conn, prod) == 0                          # back to the opening stock
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 1}], allow_negative_stock=True)
+    assert db.one("SELECT no FROM invoices WHERE id=?", (inv,))["no"] == "INV-00001"      # numbering restarts
+    assert "start fresh" in (db.data_dir / "reset_log.txt").read_text()
+
+
+def test_reset_products_and_customers_force_transactions(shop):
+    db, sup, cust, prod = _stocked(shop)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 50000}])
+    assert reset_mod().expand(["customers"]) == {"customers", "transactions"}
+    reset_mod().reset_data(db, PW, "remove customers only", ["customers"])
+    assert db.scalar("SELECT COUNT(*) FROM parties WHERE kind='customer' AND is_walkin=0") == 0
+    assert db.scalar("SELECT COUNT(*) FROM parties WHERE is_walkin=1") == 1       # walk-in customer stays
+    assert db.scalar("SELECT COUNT(*) FROM products") == 1 and db.scalar("SELECT COUNT(*) FROM parties WHERE kind='supplier'") == 1
+    reset_mod().reset_data(db, PW, "remove the products too", ["products", "suppliers"])
+    assert db.scalar("SELECT COUNT(*) FROM products") == 0 and db.scalar("SELECT COUNT(*) FROM parties WHERE kind='supplier'") == 0
+
+
+def test_reset_balances_clears_outstanding_with_adjustment(shop):
+    from app.reports import builders as B
+    db, sup, cust, prod = _stocked(shop)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 2, "price": 50000}], paid=10000)
+    masters.update_party(db, sup, "Phone Supplier", opening_balance=2500)
+    assert customer_balance(db.conn, cust) == 90000
+    reset_mod().reset_data(db, PW, "clear all baqayajat", ["balances"])
+    assert customer_balance(db.conn, cust) == 0 and supplier_balance(db.conn, sup) == 0
+    assert db.scalar("SELECT COUNT(*) FROM invoices") == 1                      # sales history kept
+    assert B.outstanding_report(db)["summary"][1] == ("Total to receive", "0.00")
+
+
+def test_factory_reset_erases_everything_and_login(env):
+    path, db = env
+    masters.add_party(db, "customer", "X")
+    r = reset_mod().reset_data(db, PW, "selling this computer", ["factory"])
+    assert r["factory"] and r["safety"].exists() and db.conn is None
+    assert not auth.is_registered(path)                                          # registration screen will return
+    assert not (path / "branding.json").exists()
+    # the safety backup can bring everything back
+    from app.services import backup
+    db2 = auth.register(path, "New", "A", "03001234567", "a@b.com", None, "u2", "other-pass", "other-pass")
+    backup.restore_backup(db2, r["safety"])
+    assert auth.login(path, "admin", PW)

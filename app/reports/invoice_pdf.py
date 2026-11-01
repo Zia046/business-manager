@@ -62,6 +62,17 @@ def _qty(x) -> str:
     return f"{x:g}"
 
 
+def _imei_html(it, small: int) -> str:
+    """IMEI line(s) printed under a phone: 'IMEI: x' or 'IMEI 1: x / IMEI 2: y'."""
+    if not it.get("serial"):
+        return ""
+    if it.get("serial2"):
+        text = f"IMEI 1: {_esc(it['serial'])}<br/>IMEI 2: {_esc(it['serial2'])}"
+    else:
+        text = f"IMEI: {_esc(it['serial'])}"
+    return f"<br/><font size={small} color='#374151'>{text}</font>"
+
+
 def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
     """size: 'A4' or '80mm'. Returns the file path."""
     d = reports.invoice_detail(db, invoice_id)
@@ -133,7 +144,7 @@ def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
         widths = [usable * 0.52, usable * 0.14, usable * 0.34]
         for it in d["items"]:
             amount = it["qty"] * it["price"] - it["discount"]
-            rows.append([Paragraph(f"{_esc(it['product_name'])}<br/>@ {_m(it['price'])}", s_norm),
+            rows.append([Paragraph(f"{_esc(it['product_name'])}{_imei_html(it, fs - 1)}<br/>@ {_m(it['price'])}", s_norm),
                          Paragraph(_qty(it["qty"]), s_norm), Paragraph(_m(amount), s_right)])
         numeric = (1, 2)
     else:
@@ -144,8 +155,7 @@ def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
                   18 * mm, 30 * mm, 24 * mm, 32 * mm]
         for i, it in enumerate(d["items"], 1):
             amount = it["qty"] * it["price"] - it["discount"]
-            desc = _esc(it["product_name"]) + (f"<br/><font size={fs - 2} color='#6b7280'>IMEI/SN: {_esc(it['serial'])}</font>"
-                                               if it["serial"] else "")
+            desc = _esc(it["product_name"]) + _imei_html(it, fs - 1)
             rows.append([Paragraph(str(i), s_norm), Paragraph(desc, s_norm), Paragraph(_qty(it["qty"]), s_right),
                          Paragraph(_m(it["price"]), s_right), Paragraph(_m(it["discount"]) if it["discount"] else "-", s_right),
                          Paragraph(_m(amount), s_right)])

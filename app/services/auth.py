@@ -35,17 +35,21 @@ def verify_password(password: str, stored: str) -> bool:
 BRANDING_FILE = "branding.json"
 
 
-def write_branding(data_dir: Path, name: str, logo_path: str | None):
-    """Company name + logo copy kept OUTSIDE the encrypted DB so the login screen can show them."""
+def write_branding(data_dir: Path, name: str, logo_path: str | None, login_id: str | None = None):
+    """Company name, logo and the last login id, kept OUTSIDE the encrypted DB so the login screen
+    can show them (and ask only for the password). login_id=None keeps the one already remembered."""
+    if login_id is None:
+        login_id = read_branding(data_dir).get("login_id")
     (Path(data_dir) / BRANDING_FILE).write_text(
-        json.dumps({"name": name, "logo": logo_path}, ensure_ascii=False), encoding="utf-8")
+        json.dumps({"name": name, "logo": logo_path, "login_id": login_id}, ensure_ascii=False),
+        encoding="utf-8")
 
 
 def read_branding(data_dir: Path) -> dict:
     try:
         return json.loads((Path(data_dir) / BRANDING_FILE).read_text(encoding="utf-8"))
     except Exception:
-        return {"name": "", "logo": None}
+        return {"name": "", "logo": None, "login_id": None}
 
 
 def is_registered(data_dir: Path) -> bool:
@@ -90,7 +94,7 @@ def register(data_dir: Path, name, address, phone, email, logo_file, login_id,
                   (login_id.strip(), hash_password(password)))
         # default customer used for cash sales
         c.execute("INSERT INTO parties(kind,name,is_walkin) VALUES('customer','Walk-in Customer',1)")
-    write_branding(data_dir, name.strip(), logo_path)
+    write_branding(data_dir, name.strip(), logo_path, login_id.strip())
     return db
 
 
@@ -125,6 +129,8 @@ def login(data_dir: Path, login_id: str, password: str) -> Database:
         raise BusinessError(GENERIC_ERROR)
     _save_lock(data_dir, {"attempts": 0, "until": 0})
     _fix_logo_path(db, data_dir)
+    brand = read_branding(data_dir)
+    write_branding(data_dir, brand.get("name") or "", brand.get("logo"), user["login_id"])  # remember for next time
     return db
 
 
@@ -154,3 +160,5 @@ def change_credentials(db: Database, current_password: str, new_login_id: str,
                   (new_login_id.strip(), hash_password(pw), user["id"]))
     if new_password:
         db.rekey(new_password)  # the encryption key follows the password
+    brand = read_branding(db.data_dir)
+    write_branding(db.data_dir, brand.get("name") or "", brand.get("logo"), new_login_id.strip())

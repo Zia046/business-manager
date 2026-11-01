@@ -47,30 +47,106 @@ def search_parties(db, kind, text=""):
 
 
 # ---------- products ----------
+MOBILE_CATEGORY = "Mobile Phone"
+
+
+# ---------- categories ----------
+def list_categories(db):
+    return db.query("SELECT * FROM categories ORDER BY id")
+
+
+def get_category(db, name):
+    return db.one("SELECT * FROM categories WHERE name=? COLLATE NOCASE", ((name or "").strip(),))
+
+
+def add_category(db, name) -> int:
+    name = (name or "").strip()
+    if not name:
+        raise BusinessError("Category name is required")
+    if get_category(db, name):
+        raise BusinessError(f"Category '{name}' already exists")
+    with db.transaction() as c:
+        return c.execute("INSERT INTO categories(name) VALUES(?)", (name,)).lastrowid
+
+
+def delete_category(db, category_id):
+    cat = db.one("SELECT * FROM categories WHERE id=?", (category_id,))
+    if not cat:
+        raise BusinessError("Category not found")
+    if cat["is_system"]:
+        raise BusinessError(f"'{cat['name']}' is a built-in category and cannot be deleted")
+    used = db.scalar("SELECT COUNT(*) FROM products WHERE category=? COLLATE NOCASE", (cat["name"],))
+    if used:
+        raise BusinessError(f"{used} product(s) use '{cat['name']}'. Move them to another category first.")
+    with db.transaction() as c:
+        c.execute("DELETE FROM categories WHERE id=?", (category_id,))
+
+
+# ---------- products ----------
 def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0, category="",
-                tags="", unit="pcs", low_stock_level=0.0, track_serial=False) -> int:
+                tags="", unit="pcs", low_stock_level=0.0, track_serial=False, imei_mode="single") -> int:
+    """A category must be chosen. Mobile phones are always IMEI-tracked, must say whether they have a
+    single or double IMEI, and cannot have an opening stock (phones enter stock through Stock Purchase,
+    where every IMEI number is compulsory)."""
     if not name.strip():
         raise BusinessError("Product name is required")
     if min(sale_price, purchase_price, opening_stock) < 0:
         raise BusinessError("Prices and stock cannot be negative")
+    cat = get_category(db, category)
+    if not cat:
+        raise BusinessError("Select a category for the product")
+    mobile = bool(cat["is_mobile"])
+    if mobile:
+        if imei_mode not in ("single", "double"):
+            raise BusinessError("Select whether this phone has a single or double IMEI")
+        if opening_stock:
+            raise BusinessError("Mobile phones cannot have an opening stock. Add them through Stock "
+                                "Purchase, where their IMEI numbers are entered.")
+    else:
+        imei_mode = "single"
     with db.transaction() as c:
         cur = c.execute(
             "INSERT INTO products(name,category,tags,unit,last_purchase_price,avg_cost,sale_price,"
-            "opening_stock,low_stock_level,track_serial) VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (name.strip(), category, tags, unit, purchase_price, purchase_price, sale_price,
-             opening_stock, low_stock_level, int(track_serial)))
+            "opening_stock,low_stock_level,track_serial,imei_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (name.strip(), cat["name"], tags, unit, purchase_price, purchase_price, sale_price,
+             opening_stock, low_stock_level, int(mobile), imei_mode))
         return cur.lastrowid
 
 
 def update_product(db, product_id, **fields):
-    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "track_serial"}
+    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode"}
     bad = set(fields) - allowed
     if bad:
         raise BusinessError(f"Cannot edit: {', '.join(sorted(bad))}")
     if not fields:
         return
+    p = db.one("SELECT * FROM products WHERE id=?", (product_id,))
+    if not p:
+        raise BusinessError("Product not found")
     if "name" in fields and not str(fields["name"]).strip():
         raise BusinessError("Product name is required")
+    has_history = db.scalar("SELECT COUNT(*) FROM stock_moves WHERE product_id=?", (product_id,)) > 0
+    if "category" in fields:
+        cat = get_category(db, fields["category"])
+        if not cat:
+            raise BusinessError("Select a category for the product")
+        fields["category"] = cat["name"]
+        if bool(cat["is_mobile"]) != bool(p["track_serial"]):
+            if has_history:
+                raise BusinessError("A product that already has stock history cannot be moved to or from "
+                                    "the Mobile Phone category.")
+            fields["track_serial"] = int(cat["is_mobile"])
+        mobile = bool(cat["is_mobile"])
+    else:
+        mobile = bool(p["track_serial"])
+    if "imei_mode" in fields:
+        if not mobile:
+            fields["imei_mode"] = "single"
+        elif fields["imei_mode"] not in ("single", "double"):
+            raise BusinessError("Select whether this phone has a single or double IMEI")
+        elif fields["imei_mode"] != p["imei_mode"] and db.scalar(
+                "SELECT COUNT(*) FROM serials WHERE product_id=?", (product_id,)):
+            raise BusinessError("Single/double IMEI cannot be changed after IMEI numbers were entered.")
     sets = ", ".join(f"{k}=?" for k in fields)
     with db.transaction() as c:
         c.execute(f"UPDATE products SET {sets} WHERE id=?", (*fields.values(), product_id))

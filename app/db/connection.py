@@ -18,7 +18,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from .schema import SCHEMA_SQL
+from .schema import SCHEMA_SQL, SCHEMA_VERSION, migrate
 
 try:  # optional dependency
     import sqlcipher3  # type: ignore
@@ -86,6 +86,10 @@ class Database:
         self.conn.execute("PRAGMA foreign_keys = ON")
         if create:
             self.conn.executescript(SCHEMA_SQL)
+            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            self._persist()
+        elif self.conn.execute("PRAGMA user_version").fetchone()["user_version"] < SCHEMA_VERSION:
+            migrate(self.conn)       # database from an older version of the program
             self._persist()
 
     # ---------- persistence ----------
