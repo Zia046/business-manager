@@ -28,16 +28,23 @@ def _spin(maximum=1e9):
     return s
 
 
+_OPEN_NUMBERS = set()        # invoice numbers held by the invoice windows that are open right now
+
+
 class SaleInvoiceDialog(EnterSafeDialog):
     def __init__(self, db, parent=None, invoice_id=None):
         super().__init__(parent)
+        # minimize / maximize buttons next to the close button
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint)
         self.db = db
+        self.inv_no = None
+        self._force_close = False
         self.invoice_id = invoice_id          # set => editing a saved invoice
         self.draft = InvoiceDraft()
         self._loading = False
         self._paid_manual = False
         self.last_saved_id = None
-        self.setWindowTitle("Edit Sale Invoice" if invoice_id else "Sale Invoice")
+        self._take_number()
         self._build()
         self._fit_window()
         self._load_customers()
@@ -45,6 +52,35 @@ class SaleInvoiceDialog(EnterSafeDialog):
             self._load_existing(invoice_id)
         self._recalc()
         self.search.setFocus()
+
+    # ---- invoice number: each open window keeps its own number ----
+    def _take_number(self):
+        if self.invoice_id:
+            self.inv_no = self.db.scalar("SELECT no FROM invoices WHERE id=?", (self.invoice_id,), "")
+            self.setWindowTitle(f"Edit Sale Invoice {self.inv_no}")
+            return
+        self.inv_no = trading.suggest_invoice_no(self.db, _OPEN_NUMBERS)
+        _OPEN_NUMBERS.add(self.inv_no)
+        self.setWindowTitle(f"Sale Invoice {self.inv_no}")
+
+    def _release_number(self):
+        _OPEN_NUMBERS.discard(self.inv_no)
+
+    def reject(self):
+        if self.draft.lines and not self._force_close:
+            ask = QMessageBox.question(self, "Close invoice",
+                                       f"Invoice {self.inv_no} is not saved. Close it without saving?",
+                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if ask != QMessageBox.Yes:
+                return
+        if not self.invoice_id:
+            self._release_number()
+        super().reject()
+
+    def accept(self):
+        if not self.invoice_id:
+            self._release_number()
+        super().accept()
 
     def _fit_window(self):
         """About 8 inch wide x 6 inch high (96 px per inch), and always inside the screen."""
@@ -63,6 +99,10 @@ class SaleInvoiceDialog(EnterSafeDialog):
 
         # ---- customer row ----
         row = QHBoxLayout()
+        no_lbl = QLabel(f"Invoice No: <b>{self.inv_no}</b>")
+        no_lbl.setStyleSheet("font-size: 14px; color: #1b6ef3; padding-right: 10px;")
+        self.no_lbl = no_lbl
+        row.addWidget(no_lbl)
         row.addWidget(QLabel("Customer:"))
         self.customer = QComboBox()
         self.customer.setEditable(True)
@@ -386,7 +426,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
                 trading.edit_invoice(self.db, self.invoice_id, pid, **args)
                 saved = self.invoice_id
             else:
-                saved = trading.create_invoice(self.db, pid, **args)
+                saved = trading.create_invoice(self.db, pid, no=self.inv_no, **args)
         except BusinessError as exc:
             QMessageBox.warning(self, "Cannot save", str(exc))
             return
@@ -405,6 +445,9 @@ class SaleInvoiceDialog(EnterSafeDialog):
             self._reset_for_new()
 
     def _reset_for_new(self):
+        self._release_number()                      # next bill of this window gets the next free number
+        self._take_number()
+        self.no_lbl.setText(f"Invoice No: <b>{self.inv_no}</b>")
         self.draft = InvoiceDraft()
         self._paid_manual = False
         self.disc.setValue(0)

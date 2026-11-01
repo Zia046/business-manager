@@ -759,3 +759,77 @@ def test_factory_reset_erases_everything_and_login(env):
     db2 = auth.register(path, "New", "A", "03001234567", "a@b.com", None, "u2", "other-pass", "other-pass")
     backup.restore_backup(db2, r["safety"])
     assert auth.login(path, "admin", PW)
+
+
+# ---------- invoice numbers for several open windows ----------
+def test_invoice_numbers_reuse_skipped_number_same_day(shop):
+    db, sup, cust, prod = _stocked(shop)
+    item = [{"product_id": prod, "qty": 1, "price": 50000}]
+    n1 = trading.suggest_invoice_no(db)
+    assert n1 == "INV-00001"
+    a = trading.suggest_invoice_no(db, {n1})                      # second window opens while first is open
+    assert a == "INV-00002"
+    b = trading.suggest_invoice_no(db, {n1, a})
+    assert b == "INV-00003"
+    # windows 1 and 3 are saved with the numbers they were given, window 2 is closed without saving
+    i1 = trading.create_invoice(db, cust, item, no=n1)
+    i3 = trading.create_invoice(db, cust, item, no=b)
+    assert [db.scalar("SELECT no FROM invoices WHERE id=?", (i,)) for i in (i1, i3)] == [n1, b]
+    # the skipped number goes to the next invoice (same date)
+    assert trading.suggest_invoice_no(db) == "INV-00002"
+    i2 = trading.create_invoice(db, cust, item, no="INV-00002")
+    assert db.scalar("SELECT no FROM invoices WHERE id=?", (i2,)) == "INV-00002"
+    assert trading.suggest_invoice_no(db) == "INV-00004"
+    # plain create_invoice (no number given) continues after the highest number
+    i4 = trading.create_invoice(db, cust, item)
+    assert db.scalar("SELECT no FROM invoices WHERE id=?", (i4,)) == "INV-00004"
+
+
+def test_skipped_invoice_number_not_reused_on_a_different_date(shop):
+    db, sup, cust, prod = _stocked(shop)
+    item = [{"product_id": prod, "qty": 1, "price": 50000}]
+    trading.create_invoice(db, cust, item, no="INV-00001", date="2026-10-30 10:00:00")
+    trading.create_invoice(db, cust, item, no="INV-00003", date="2026-10-31 10:00:00")
+    assert trading.suggest_invoice_no(db, today="2026-10-31") == "INV-00004"   # gap sits between two dates
+    assert trading.suggest_invoice_no(db, today="2026-10-30") == "INV-00004"
+
+
+def test_number_taken_meanwhile_falls_back_to_next(shop):
+    db, sup, cust, prod = _stocked(shop)
+    item = [{"product_id": prod, "qty": 1, "price": 50000}]
+    trading.create_invoice(db, cust, item, no="INV-00001")
+    i = trading.create_invoice(db, cust, item, no="INV-00001")     # same number asked again
+    assert db.scalar("SELECT no FROM invoices WHERE id=?", (i,)) == "INV-00002"
+
+
+def test_documents_carry_software_contact_line(shop, tmp_path):
+    import subprocess, shutil
+    from app.reports.invoice_pdf import build_invoice_pdf
+    from app.config import DEVELOPER_PHONE
+    db, sup, cust, prod = _stocked(shop)
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 50000}])
+    if shutil.which("pdftotext"):
+        for size in ("A4", "80mm"):
+            out = build_invoice_pdf(db, inv, tmp_path / f"{size}.pdf", size)
+            text = subprocess.run(["pdftotext", out, "-"], capture_output=True, text=True).stdout
+            assert DEVELOPER_PHONE in text and "To buy this software" in text.replace("\n", " ")
+
+
+def test_cash_recovery_khata_last_month(shop):
+    from datetime import datetime, timedelta
+    db, sup, cust, prod = _stocked(shop)
+    old = (datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d 10:00:00")
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 50000}], date=old)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 50000}])
+    since = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    led = reports.customer_ledger(db, cust, since, None)
+    assert led["period_opening"] == 50000 and len(led["rows"]) == 1 and led["closing"] == 100000
+    payments.receive_from_customer(db, cust, 30000)
+    led = reports.customer_ledger(db, cust, since, None)
+    assert led["closing"] == 70000 and len(led["rows"]) == 2
+
+
+def test_cash_recovery_and_new_screens_compile():
+    import py_compile
+    for f in ("cash_recovery", "sale_invoice", "modules", "main_window", "stock_purchase"):
+        py_compile.compile(f"app/ui/{f}.py", doraise=True)

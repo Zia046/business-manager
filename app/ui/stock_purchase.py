@@ -16,7 +16,7 @@ from .products import ProductForm
 from .purchase_model import PurchaseDraft
 from .widgets import money
 
-COLS = ["ID", "Product", "In stock", "Qty", "Purchase Price (type it)", "Amount", ""]
+COLS = ["ID", "Product", "In stock", "Quantity Purchase", "Purchase Price", "Amount", "Remove"]
 C_ID, C_NAME, C_STOCK, C_QTY, C_PRICE, C_AMT, C_DEL = range(7)
 EDIT_ORDER = (C_QTY, C_PRICE)
 

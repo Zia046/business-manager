@@ -8,6 +8,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from ..config import SOFTWARE_CONTACT_LINE
 from ..services import reports
 from .invoice_pdf import ACCENT, _esc, _fonts, _m, _qty
 
@@ -29,6 +30,10 @@ def _header(co, mk, bold, width):
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LINEBELOW", (0, 0), (-1, 0), 1.2, ACCENT),
                            ("BOTTOMPADDING", (0, 0), (-1, 0), 6)]))
     return t
+
+
+def _contact(mk):
+    return Paragraph(_esc(SOFTWARE_CONTACT_LINE), mk("sw", fontSize=7, alignment=1, textColor=colors.grey))
 
 
 def build_purchase_pdf(db, purchase_id: int, out_path) -> str:
@@ -62,6 +67,7 @@ def build_purchase_pdf(db, purchase_id: int, out_path) -> str:
     story += [t, Spacer(1, 4 * mm), tot]
     if pur["note"]:
         story += [Spacer(1, 4 * mm), Paragraph(f"<b>Note:</b> {_esc(pur['note'])}", mk("n"))]
+    story += [Spacer(1, 8 * mm), _contact(mk)]
     SimpleDocTemplate(str(out_path), pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm, topMargin=16 * mm,
                       bottomMargin=16 * mm, title=pur["no"], author=co["name"]).build(story)
     return str(out_path)
@@ -89,7 +95,7 @@ def build_voucher_pdf(db, voucher_no: str, out_path) -> str:
     story = [_header(co, mk, bold, usable), Spacer(1, 5 * mm),
              Paragraph(f"<b>{title}</b>", mk("t", fontName=bold, fontSize=14, leading=19, textColor=ACCENT)),
              Paragraph(f"Voucher No: <b>{_esc(v['no'])}</b> &nbsp;&nbsp; Date: {v['date'][:16]}", mk("m")),
-             Spacer(1, 4 * mm), t, Spacer(1, 18 * mm), sig]
+             Spacer(1, 4 * mm), t, Spacer(1, 18 * mm), sig, Spacer(1, 4 * mm), _contact(mk)]
     SimpleDocTemplate(str(out_path), pagesize=A5, leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm,
                       bottomMargin=12 * mm, title=v["no"], author=co["name"]).build(story)
     return str(out_path)

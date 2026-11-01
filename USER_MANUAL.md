@@ -67,3 +67,12 @@ Customer Transactions (customer chunein), Cash Received, Profit Loss, Invoice Wi
 - **Stock Purchase:** bill automatically Paid save hota hai.
 - **Outstanding:** sirf customers ke baqayajat.
 - **Utilities > Reset Database:** data chun kar mitayen. Wajah, current password aur 2 dafa tasdeeq zaroori. Mitane se pehle safety backup khud ban jata hai.
+
+### Cash Recovery (naya)
+Customer chunte hi uska pichle 1 mahine ka khata aur current balance khul jata hai. Nayi recovery likh kar **Save** ya **Save & Print Voucher** dabayein: balance kam ho jata hai aur khata dobara dikhta hai.
+
+### Sale Invoice - kayi bill ek saath
+Window ke upar Minimize/Maximize ke button hain. Minimize kar ke home se dobara **Sale Invoice** dabayein to naya bill khulta hai. Har bill ko khulte waqt apna number mil jata hai aur wahi number save hota hai. Agar koi bill bina save kiye band ho jaye to uska number agle naye bill ko (usi tarikh mein) mil jata hai.
+
+### Software ka rabta
+Front page par "Developed by Burhan Nexus, 03475093446, ziaullah.046@gmail.com" hamesha nazar aata hai (badla ya mitaya nahi ja sakta). Har bill/voucher par chhoti line: "To buy this software, contact: 03475093446".

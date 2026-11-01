@@ -8,6 +8,12 @@ DATA_FOLDER_NAME = "BusinessManagerData"
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_SECONDS = 300
 
+# Fixed developer / sales contact (shown on the home page and on every printout; not editable in the program)
+DEVELOPER_NAME = "Burhan Nexus"
+DEVELOPER_PHONE = "03475093446"
+DEVELOPER_EMAIL = "ziaullah.046@gmail.com"
+SOFTWARE_CONTACT_LINE = f"To buy this software, contact: {DEVELOPER_PHONE}"
+
 
 def resolve_data_dir(override: str | None = None) -> tuple[Path, bool]:
     """Return (data_dir, used_fallback).

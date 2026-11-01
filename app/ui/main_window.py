@@ -7,6 +7,7 @@ from PySide6.QtGui import QAction, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QMainWindow, QPushButton,
                                QVBoxLayout, QWidget)
 
+from ..config import DEVELOPER_EMAIL, DEVELOPER_NAME, DEVELOPER_PHONE
 from ..services import backup, masters
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
@@ -87,6 +88,13 @@ class MainWindow(QMainWindow):
         root.addLayout(grid_wrap)
         root.addStretch(2)
 
+        # fixed developer line: a plain label, so it can be neither edited nor deleted from the program
+        dev = QLabel(f"Developed by <b>{DEVELOPER_NAME}</b>   |   Mobile: <b>{DEVELOPER_PHONE}</b>   |   "
+                     f"Email: <b>{DEVELOPER_EMAIL}</b>", alignment=Qt.AlignCenter)
+        dev.setStyleSheet(f"color: {MUTED}; font-size: 13px;")
+        dev.setFocusPolicy(Qt.NoFocus)
+        root.addWidget(dev)
+
     def refresh_header(self):
         """Reload company name (CAPITAL LETTERS) and logo, e.g. after Company Information Edit."""
         co = masters.get_company(self.db)
@@ -102,6 +110,11 @@ class MainWindow(QMainWindow):
         self.clock.setText(datetime.now().strftime("%A, %d %B %Y     %I:%M:%S %p"))
 
     def closeEvent(self, event):
+        for dlg in list(getattr(self, "invoice_windows", [])):     # unsaved invoices ask before closing
+            dlg.show()
+            if not dlg.close():
+                event.ignore()
+                return
         if not self.skip_exit_backup and self.db.conn is not None:
             backup.auto_backup_on_exit(self.db)   # never blocks closing, even if it fails
         self.db.close()  # writes the final encrypted snapshot (no-op after a restore)

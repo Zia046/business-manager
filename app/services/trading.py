@@ -90,14 +90,54 @@ def _post_invoice(c, inv_id, no, date, party, items, discount, paid, note, allow
     post_cash(c, date, "in", paid, "invoice", inv_id, party["id"], no)
 
 
+def _inv_num(no: str) -> int:
+    return int(no.split("-")[1])
+
+
+def suggest_invoice_no(db, reserved=(), today=None) -> str:
+    """Number for a new invoice window.
+
+    Several invoice windows can be open together; each keeps the number it was given when it opened.
+    A number that was skipped (its window was closed without saving) is given to the next new invoice,
+    but only on the same date as the neighbouring saved invoices - so numbers stay in date order.
+    `reserved` = numbers (e.g. 'INV-00007') held by other open windows."""
+    today = today or now()[:10]
+    used = {}
+    for r in db.query("SELECT no, date FROM invoices WHERE no LIKE 'INV-%'"):
+        used[_inv_num(r["no"])] = r["date"][:10]
+    held = {_inv_num(x) for x in reserved if x}
+    counter = db.scalar("SELECT value FROM counters WHERE name='INV'", (), 0) or 0
+    top = max([counter, *used, *held], default=0)
+    for n in range(1, top + 1):
+        if n in used or n in held:
+            continue
+        lower = max((k for k in used if k < n), default=None)
+        higher = min((k for k in used if k > n), default=None)
+        if (lower is None or used[lower] == today) and (higher is None or used[higher] == today) \
+                and (lower is not None or higher is not None):
+            return f"INV-{n:05d}"
+    return f"INV-{top + 1:05d}"
+
+
+def _take_invoice_no(c, wanted):
+    """Use the number the window was given; if someone took it meanwhile, fall back to the next free one."""
+    if wanted:
+        n = _inv_num(wanted)
+        if not c.execute("SELECT 1 FROM invoices WHERE no=?", (wanted,)).fetchone():
+            c.execute("INSERT INTO counters(name,value) VALUES('INV',?) "
+                      "ON CONFLICT(name) DO UPDATE SET value=MAX(value, excluded.value)", (n,))
+            return wanted
+    return next_no(c, "INV")
+
+
 def create_invoice(db, party_id, items, discount=0.0, paid=0.0, note="", date=None,
-                   allow_negative_stock=False) -> int:
+                   allow_negative_stock=False, no=None) -> int:
     date = date or now()
     with db.transaction() as c:
         party = c.execute("SELECT * FROM parties WHERE id=? AND kind='customer'", (party_id,)).fetchone()
         if not party:
             raise BusinessError("Customer not found")
-        no = next_no(c, "INV")
+        no = _take_invoice_no(c, no)
         inv_id = c.execute("INSERT INTO invoices(no,date,party_id,subtotal,total) VALUES(?,?,?,0,0)",
                            (no, date, party_id)).lastrowid
         _post_invoice(c, inv_id, no, date, party, items, discount, paid, note, allow_negative_stock)

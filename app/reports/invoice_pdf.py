@@ -10,6 +10,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle)
 
+from ..config import SOFTWARE_CONTACT_LINE
 from ..services import reports
 
 ACCENT = colors.HexColor("#1b6ef3")
@@ -190,7 +191,10 @@ def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
         story += [Spacer(1, 4 * mm), Paragraph(f"<b>Note:</b> {_esc(inv['note']).replace(chr(10), '<br/>')}", s_norm)]
     story += [Spacer(1, 6 * mm),
               Paragraph("Thank you for your business!", st("ty", fontName=bold, alignment=TA_CENTER,
-                                                           textColor=ACCENT if not thermal else colors.black))]
+                                                           textColor=ACCENT if not thermal else colors.black)),
+              Spacer(1, 2 * mm),
+              Paragraph(_esc(SOFTWARE_CONTACT_LINE), st("sw", fontSize=7 if not thermal else 6, alignment=TA_CENTER,
+                                                         textColor=colors.grey))]
 
     out_path = str(out_path)
     if thermal:  # continuous roll: measure the content, then size the page to fit
