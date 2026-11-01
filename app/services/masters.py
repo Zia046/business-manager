@@ -152,6 +152,10 @@ def update_product(db, product_id, **fields):
         c.execute(f"UPDATE products SET {sets} WHERE id=?", (*fields.values(), product_id))
 
 
+def db_has_imei(db, product_id) -> bool:
+    return db.scalar("SELECT COUNT(*) FROM serials WHERE product_id=?", (product_id,)) > 0
+
+
 def delete_product(db, product_id):
     used = db.scalar("SELECT COUNT(*) FROM stock_moves WHERE product_id=?", (product_id,))
     with db.transaction() as c:

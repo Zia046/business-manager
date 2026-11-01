@@ -1,6 +1,7 @@
 """Products screen: search, add, edit, delete, low-stock highlight."""
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QCheckBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
 
 from ..services import masters
@@ -22,57 +23,92 @@ class ProductForm(QDialog):
         self.db, self.product = db, product
         self.saved_id = None
         self.setWindowTitle("Edit Product" if product else "New Product")
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(480)
         p = product or {}
         lay = QVBoxLayout(self)
         lay.setContentsMargins(26, 22, 26, 22)
         form = QFormLayout()
         form.addRow("ID", QLabel(str(p["id"]) if product else "Auto (system generated)"))
         self.name = QLineEdit(p.get("name", ""))
-        self.category = QLineEdit(p.get("category") or "")
+
+        # a category must always be chosen from the list (Utilities/New Account > Categories adds more)
+        self.category = QComboBox()
+        self.category.addItem("-- Select category --", None)
+        for c in masters.list_categories(db):
+            self.category.addItem(c["name"], c["is_mobile"])
+        idx = self.category.findText(p.get("category") or "", Qt.MatchFixedString)
+        self.category.setCurrentIndex(max(idx, 0))
+
+        self.imei_mode = QComboBox()
+        self.imei_mode.addItem("Single IMEI (one number)", "single")
+        self.imei_mode.addItem("Double IMEI (two numbers)", "double")
+        self.imei_mode.setCurrentIndex(1 if p.get("imei_mode") == "double" else 0)
         self.tags = QLineEdit(p.get("tags") or "", placeholderText="#mobile #samsung #android")
         self.unit = QLineEdit(p.get("unit") or "pcs")
         self.purchase = _spin(p.get("last_purchase_price", 0))
         self.sale = _spin(p.get("sale_price", 0))
         self.opening = _spin(p.get("opening_stock", 0), 3)
         self.low = _spin(p.get("low_stock_level", 0), 3)
-        self.serial = QCheckBox("Track IMEI / serial number for each piece")
-        self.serial.setChecked(bool(p.get("track_serial")))
         if product:  # cost and opening stock change only through purchases/sales
             self.purchase.setEnabled(False)
             self.opening.setEnabled(False)
         form.addRow("Name *", self.name)
-        form.addRow("Category", self.category)
+        form.addRow("Category *", self.category)
+        form.addRow("IMEI type", self.imei_mode)
         form.addRow("Hash tags", self.tags)
         form.addRow("Unit", self.unit)
         form.addRow("Purchase Price", self.purchase)
         form.addRow("Sale Price", self.sale)
         form.addRow("Opening Stock", self.opening)
         form.addRow("Low-stock alert at", self.low)
-        form.addRow("", self.serial)
         lay.addLayout(form)
+        self.hint = QLabel("")
+        self.hint.setObjectName("subtitle")
+        self.hint.setWordWrap(True)
+        lay.addWidget(self.hint)
         self.error = QLabel("")
         self.error.setObjectName("error")
+        self.error.setWordWrap(True)
         lay.addWidget(self.error)
         save = QPushButton("Save")
         save.setDefault(True)
         save.clicked.connect(self.save)
         lay.addWidget(save)
+        self.category.currentIndexChanged.connect(self._category_changed)
+        self._category_changed()
+        if product and masters.db_has_imei(db, product["id"]):
+            self.imei_mode.setEnabled(False)       # cannot switch single/double once IMEI numbers exist
+
+    def _is_mobile(self) -> bool:
+        return self.category.currentData() == 1
+
+    def _category_changed(self, *_):
+        mobile = self._is_mobile()
+        self.imei_mode.setEnabled(mobile)
+        if mobile:
+            self.opening.setValue(0)
+            self.opening.setEnabled(False)
+            self.hint.setText("Mobile phones are added through Stock Purchase, where the IMEI number of "
+                              "every phone must be entered (10 to 100 digits). Choose single or double IMEI.")
+        else:
+            self.opening.setEnabled(self.product is None)
+            self.hint.setText("")
 
     def save(self):
         try:
+            cat = self.category.currentText() if self.category.currentData() is not None else ""
+            mode = self.imei_mode.currentData()
             if self.product:
                 masters.update_product(self.db, self.product["id"], name=self.name.text().strip(),
-                                       category=self.category.text(), tags=self.tags.text(),
-                                       unit=self.unit.text(), sale_price=self.sale.value(),
-                                       low_stock_level=self.low.value(),
-                                       track_serial=int(self.serial.isChecked()))
+                                       category=cat, tags=self.tags.text(), unit=self.unit.text(),
+                                       sale_price=self.sale.value(), low_stock_level=self.low.value(),
+                                       imei_mode=mode)
                 self.saved_id = self.product["id"]
             else:
                 self.saved_id = masters.add_product(
                     self.db, self.name.text(), self.sale.value(), self.purchase.value(),
-                    self.opening.value(), self.category.text(), self.tags.text(), self.unit.text(),
-                    self.low.value(), self.serial.isChecked())
+                    self.opening.value(), cat, self.tags.text(), self.unit.text(),
+                    self.low.value(), imei_mode=mode)
         except BusinessError as exc:
             self.error.setText(str(exc))
             return

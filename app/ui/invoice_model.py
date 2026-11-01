@@ -7,9 +7,9 @@ class InvoiceDraft:
         self.lines = []      # dicts: product_id, name, stock, cost, qty, price, discount, serial
         self.discount = 0.0
 
-    def add_product(self, p, serial=None):
+    def add_product(self, p, serial=None, serial2=None):
         """Add a product (row from masters.search_products). Same product again => qty + 1,
-        except serial-tracked items which always get their own line (one IMEI per line)."""
+        except phones which always get their own line (one phone = one line, with its IMEI)."""
         if not p["track_serial"]:
             for ln in self.lines:
                 if ln["product_id"] == p["id"]:
@@ -17,7 +17,8 @@ class InvoiceDraft:
                     return ln
         ln = {"product_id": p["id"], "name": p["name"], "stock": p["stock"], "cost": p["avg_cost"],
               "qty": 1.0, "price": p["sale_price"], "discount": 0.0, "serial": serial,
-              "track_serial": bool(p["track_serial"])}
+              "serial2": serial2, "track_serial": bool(p["track_serial"]),
+              "imei_mode": p.get("imei_mode", "single")}
         self.lines.append(ln)
         return ln
 
@@ -44,4 +45,8 @@ class InvoiceDraft:
 
     def service_items(self):
         return [{"product_id": ln["product_id"], "qty": ln["qty"], "price": ln["price"],
-                 "discount": ln["discount"], "serial": ln["serial"]} for ln in self.lines]
+                 "discount": ln["discount"], "serial": ln["serial"],
+                 "serial2": ln.get("serial2")} for ln in self.lines]
+
+    def imeis_in_use(self):
+        return {x for ln in self.lines for x in (ln["serial"], ln.get("serial2")) if x}

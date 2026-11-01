@@ -12,6 +12,8 @@ from .report_screens import SCREENS
 from .returns_ui import ReturnDialog
 from .backup_ui import BackupDialog, restore_dialog
 from .account_screens import open_balance_sheet, open_cash_book, open_vouchers
+from .categories_ui import CategoriesDialog
+from .reset_ui import ResetDialog
 from .payments_ui import PaymentDialog
 from .sale_invoice import SaleInvoiceDialog
 from .stock_purchase import StockPurchaseDialog
@@ -27,6 +29,8 @@ def _change_password(win):
 
 
 MODULES = {
+    "categories": lambda win: CategoriesDialog(win.db, win).exec(),
+    "reset_db": lambda win: ResetDialog(win).exec(),
     "backup": lambda win: BackupDialog(win.db, win).exec(),
     "restore": restore_dialog,
     "sale_return": lambda win: ReturnDialog(win.db, "sale", win).exec(),

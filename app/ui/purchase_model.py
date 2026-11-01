@@ -7,6 +7,7 @@ class PurchaseDraft:
         self.lines = []  # product_id, name, qty, price (None until typed), serials, track_serial
 
     def add_product(self, p, serials=None):
+        """serials: for phones a list of (imei1, imei2 or None), one per phone; quantity = number of phones."""
         serials = serials or []
         if not p["track_serial"]:
             for ln in self.lines:
@@ -14,7 +15,8 @@ class PurchaseDraft:
                     ln["qty"] += 1
                     return ln
         ln = {"product_id": p["id"], "name": p["name"], "qty": float(len(serials) or 1), "price": None,
-              "serials": serials, "track_serial": bool(p["track_serial"])}
+              "serials": serials, "track_serial": bool(p["track_serial"]),
+              "imei_mode": p.get("imei_mode", "single")}
         self.lines.append(ln)
         return ln
 
@@ -27,6 +29,9 @@ class PurchaseDraft:
 
     def missing_prices(self):
         return [ln for ln in self.lines if ln["price"] is None]
+
+    def imeis_in_use(self):
+        return {x for ln in self.lines for u in ln["serials"] for x in u if x}
 
     def serial_mismatch(self):
         """Serial-tracked lines must list exactly one IMEI per piece."""

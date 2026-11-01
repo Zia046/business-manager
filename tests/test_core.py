@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [4, 4, 4, 3, 9, 4]
+    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 9, 5]
     assert len(HOME_BUTTONS) == 7
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design

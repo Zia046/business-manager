@@ -1,12 +1,14 @@
 """Stock Purchase window: the purchase price is always typed by the user."""
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDoubleSpinBox, QGridLayout,
-                               QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QMessageBox,
-                               QPlainTextEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
+from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplication, QDoubleSpinBox, QGridLayout,
+                               QHBoxLayout, QLabel, QLineEdit, QListWidget, QMessageBox, QPlainTextEdit,
+                               QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
 from ..services import masters, trading
 from ..services.common import BusinessError, supplier_balance
+from .enter_safe import EnterSafeDialog
+from .imei_dialogs import ask_purchase_imeis
 from .parties import PartyForm
 from .party_picker import combo_party_id, make_party_combo
 from .printing import print_purchase
@@ -16,9 +18,10 @@ from .widgets import money
 
 COLS = ["ID", "Product", "In stock", "Qty", "Purchase Price (type it)", "Amount", ""]
 C_ID, C_NAME, C_STOCK, C_QTY, C_PRICE, C_AMT, C_DEL = range(7)
+EDIT_ORDER = (C_QTY, C_PRICE)
 
 
-class StockPurchaseDialog(QDialog):
+class StockPurchaseDialog(EnterSafeDialog):
     def __init__(self, db, parent=None):
         super().__init__(parent)
         self.db = db
@@ -26,7 +29,7 @@ class StockPurchaseDialog(QDialog):
         self._stock = {}
         self._loading = False
         self.setWindowTitle("Stock Purchase")
-        self.resize(1100, 700)
+        self.resize(980, 660)
         self._build()
         self._recalc()
         self.search.setFocus()
@@ -71,6 +74,7 @@ class StockPurchaseDialog(QDialog):
         for c, w in ((C_ID, 50), (C_NAME, 330), (C_STOCK, 90), (C_QTY, 90), (C_PRICE, 200), (C_AMT, 130), (C_DEL, 90)):
             self.table.setColumnWidth(c, w)
         self.table.itemChanged.connect(self._cell_changed)
+        self.table.itemDelegate().closeEditor.connect(self._editor_closed)
         root.addWidget(self.table, 1)
 
         bottom = QHBoxLayout()
@@ -92,11 +96,11 @@ class StockPurchaseDialog(QDialog):
         self.paid.setRange(0, 1e9)
         self.paid.setDecimals(2)
         self.paid.setGroupSeparatorShown(True)
-        self.paid.valueChanged.connect(self._recalc)
+        self.paid.setEnabled(False)          # purchases are always saved as fully paid
         self.balance_lbl = QLabel("0.00")
         self.balance_lbl.setStyleSheet("font-weight: 700; font-size: 16px;")
-        for i, (t, w) in enumerate((("TOTAL", self.total_lbl), ("Paid now", self.paid),
-                                    ("Balance payable", self.balance_lbl))):
+        for i, (t, w) in enumerate((("TOTAL", self.total_lbl), ("Paid (automatic, full)", self.paid),
+                                    ("Balance", self.balance_lbl))):
             grid.addWidget(QLabel(t), i, 0)
             grid.addWidget(w, i, 1, Qt.AlignRight)
         bottom.addLayout(grid, 2)
@@ -155,25 +159,32 @@ class StockPurchaseDialog(QDialog):
     def _add_product(self, p):
         serials = []
         if p["track_serial"]:
-            text, ok = QInputDialog.getMultiLineText(
-                self, "IMEI / Serial numbers", f"Enter one IMEI/serial per line for {p['name']}:")
-            serials = [s.strip() for s in text.splitlines() if s.strip()] if ok else []
-            if not serials:
+            # a phone cannot be saved without its IMEI number(s)
+            units = ask_purchase_imeis(self, p["name"], p["imei_mode"], checker=self._check_units)
+            if not units:
                 return
-            if len(set(serials)) != len(serials):
-                QMessageBox.warning(self, "Duplicate", "The same IMEI is listed twice.")
-                return
+            serials = units
         self._stock[p["id"]] = p["stock"]
-        self.draft.add_product(p, serials)
+        ln = self.draft.add_product(p, serials)
+        idx = self.draft.lines.index(ln)
         self._refresh_table()
-        self.search.setFocus()
+        QTimer.singleShot(0, lambda: self._edit_cell(idx, C_QTY if not ln["track_serial"] else C_PRICE))
+
+    def _check_units(self, units):
+        used = self.draft.imeis_in_use()
+        for u in units:
+            for x in u:
+                if x and x in used:
+                    raise BusinessError(f"IMEI {x} is already on this purchase")
+                if x and self.db.scalar("SELECT COUNT(*) FROM serials WHERE serial=? OR imei2=?", (x, x)):
+                    raise BusinessError(f"IMEI {x} already exists in the stock")
 
     def _refresh_table(self):
         self._loading = True
         self.table.setRowCount(len(self.draft.lines))
         for r, ln in enumerate(self.draft.lines):
             price_txt = "" if ln["price"] is None else f"{ln['price']:.2f}"
-            name = ln["name"] + (f"  [{len(ln['serials'])} IMEI]" if ln["serials"] else "")
+            name = ln["name"] + (f"  [{len(ln['serials'])} phone(s) with IMEI]" if ln["serials"] else "")
             cells = [(C_ID, str(ln["product_id"]), False), (C_NAME, name, False),
                      (C_STOCK, f"{self._stock.get(ln['product_id'], 0):g}", False),
                      (C_QTY, f"{ln['qty']:g}", not ln["track_serial"]), (C_PRICE, price_txt, True),
@@ -188,6 +199,7 @@ class StockPurchaseDialog(QDialog):
                 self.table.setItem(r, col, it)
             rm = QPushButton("Remove")
             rm.setObjectName("secondary")
+            rm.setAutoDefault(False)
             rm.clicked.connect(lambda _=False, i=r: self._remove(i))
             self.table.setCellWidget(r, C_DEL, rm)
         self._loading = False
@@ -213,12 +225,36 @@ class StockPurchaseDialog(QDialog):
                 ln["price" if item.column() == C_PRICE else "qty"] = v
         except ValueError:
             self.warn.setText("Enter a valid positive number.")
-        self._refresh_table()
+        QTimer.singleShot(0, self._refresh_table)     # rebuild after the edit has finished
+
+    # ---- Enter walks Qty -> Price -> back to the search box ----
+    def _editor_closed(self, editor, hint):
+        if hint == QAbstractItemDelegate.EndEditHint.SubmitModelCache:
+            QTimer.singleShot(0, self._next_cell)
+
+    def _next_cell(self):
+        row, col = self.table.currentRow(), self.table.currentColumn()
+        later = [c for c in EDIT_ORDER if c > col]
+        if row >= 0 and later and self._edit_cell(row, later[0]):
+            return
+        self.search.setFocus()
+        self.search.selectAll()
+
+    def _edit_cell(self, row, col) -> bool:
+        for c in [x for x in EDIT_ORDER if x >= col]:
+            it = self.table.item(row, c)
+            if it is not None and it.flags() & Qt.ItemIsEditable:
+                self.table.setFocus()
+                self.table.setCurrentCell(row, c)
+                self.table.editItem(it)
+                return True
+        return False
 
     def _recalc(self, *_):
         total = self.draft.total()
         self.total_lbl.setText(money(total))
-        self.balance_lbl.setText(money(total - self.paid.value()))
+        self.paid.setValue(total)                      # saved as fully paid
+        self.balance_lbl.setText(money(0))
         miss = self.draft.missing_prices()
         self.warn.setText("Type the purchase price for: " + ", ".join(ln["name"] for ln in miss) if miss else "")
 
@@ -235,7 +271,7 @@ class StockPurchaseDialog(QDialog):
             QMessageBox.warning(self, "IMEI", "IMEI count must match the quantity.")
             return
         try:
-            pid = trading.create_purchase(self.db, sid, self.draft.service_items(), paid=self.paid.value(),
+            pid = trading.create_purchase(self.db, sid, self.draft.service_items(), paid=self.draft.total(),
                                           note=self.note.toPlainText().strip())
         except BusinessError as exc:
             QMessageBox.warning(self, "Cannot save", str(exc))

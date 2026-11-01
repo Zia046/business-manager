@@ -10,12 +10,13 @@ from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QMainWindow, QP
 from ..services import backup, masters
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
-from .theme import ACCENT, MUTED
+from .theme import ACCENT, BG, HOME_BTN_BG, HOME_BTN_BORDER, HOME_BTN_HOVER, HOME_BTN_TEXT, MUTED
 
 HOME_BUTTON_STYLE = f"""
-QPushButton {{ background: #ffffff; color: #1f2937; border: 1px solid #dbe2ec; border-radius: 14px;
-              padding: 18px 12px; font-size: 16px; font-weight: 600; min-width: 190px; min-height: 64px; }}
-QPushButton:hover {{ background: #f0f6ff; border: 1px solid {ACCENT}; color: {ACCENT}; }}
+QPushButton {{ background: {HOME_BTN_BG}; color: {HOME_BTN_TEXT}; border: 1px solid {HOME_BTN_BORDER};
+              border-radius: 14px; padding: 18px 12px; font-size: 16px; font-weight: 600;
+              min-width: 190px; min-height: 64px; }}
+QPushButton:hover {{ background: {HOME_BTN_HOVER}; border: 1px solid #e58f8a; }}
 """
 
 
@@ -24,7 +25,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.db = db
         self.skip_exit_backup = False
-        self.setStyleSheet("QMainWindow, QWidget#home { background: #ffffff; }")
+        self.setStyleSheet(f"QMainWindow, QWidget#home {{ background: {BG}; }}")
         self._build_menu()
         QShortcut(QKeySequence("F2"), self, activated=lambda: open_module(self, "sale_invoice", "Sale Invoice"))
         self._build_home()

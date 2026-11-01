@@ -3,6 +3,7 @@ name: Build Windows exe
 on:
   workflow_dispatch:          # "Run workflow" button in the Actions tab
   push:
+    branches: [main]          # every push builds a fresh exe
     tags: ["v*"]              # pushing a tag like v0.1.0 also creates a Release with the exe
 
 permissions:

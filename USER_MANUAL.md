@@ -54,3 +54,16 @@ Customer Transactions (customer chunein), Cash Received, Profit Loss, Invoice Wi
 - Roz ya hafte mai backup **USB mai bhi** rakhein. Computer kharab ho jaye to D: drive ka data bhi ja sakta hai.
 - Data folder (D:\BusinessManagerData) ko kabhi delete na karein.
 - Naye computer par data le jane ke liye: purane computer ka backup file le jayen, naye computer par software khol kar Registration mai kuch bhi likhein, phir Utilities > Restore Backup.
+
+---
+
+## Naye features (update)
+
+- **Login:** ab har dafa sirf Password poochta hai. Username yaad rehta hai ("Login with a different Login ID" se badal sakte hain).
+- **Categories:** New Account > Categories mein nai category add/delete karein. Default: Mobile Phone, Accessories, Contagious, Disposable, Other.
+- **Product banate waqt category zaroori hai.** Mobile Phone category mein Single ya Double IMEI chunna parta hai. Mobile ka stock sirf Stock Purchase se aata hai (IMEI ke saath).
+- **IMEI qaidey:** sirf numbers, kam az kam 10 aur ziada se ziada 100 digits; double IMEI mein dono number alag hone chahiye.
+- **Sale Invoice:** mobile bechte waqt IMEI dobara type karna parta hai; bill par IMEI chhapti hai. Enter dabane se window band nahi hoti.
+- **Stock Purchase:** bill automatically Paid save hota hai.
+- **Outstanding:** sirf customers ke baqayajat.
+- **Utilities > Reset Database:** data chun kar mitayen. Wajah, current password aur 2 dafa tasdeeq zaroori. Mitane se pehle safety backup khud ban jata hai.

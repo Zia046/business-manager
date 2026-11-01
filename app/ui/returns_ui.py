@@ -1,5 +1,5 @@
 """Sale Return and Purchase Return screens."""
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDoubleSpinBox, QGridLayout, QHBoxLayout,
                                QLabel, QLineEdit, QListWidget, QMessageBox, QPushButton, QTableWidget,
@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QDoubleSpi
 
 from ..services import masters, trading
 from ..services.common import BusinessError
+from .enter_safe import EnterSafeDialog
+from .imei_dialogs import ask_sale_imei
 from .party_picker import combo_party_id, make_party_combo
 from .return_model import ReturnDraft
 from .widgets import money
@@ -22,7 +24,7 @@ CFG = {
 }
 
 
-class ReturnDialog(QDialog):
+class ReturnDialog(EnterSafeDialog):
     def __init__(self, db, kind, parent=None):
         super().__init__(parent)
         self.db, self.kind, self.cfg = db, kind, CFG[kind]
@@ -190,7 +192,7 @@ class ReturnDialog(QDialog):
                 ln["qty" if item.column() == C_QTY else "price"] = v
         except ValueError:
             self.warn.setText("Enter a valid positive number.")
-        self._refresh()
+        QTimer.singleShot(0, self._refresh)      # never rebuild the table inside itemChanged
 
     def _recalc(self):
         self.total_lbl.setText(money(self.draft.total()))
@@ -202,16 +204,30 @@ class ReturnDialog(QDialog):
         if not pid:
             QMessageBox.warning(self, self.cfg["title"], f"Please select a {self.cfg['party'].lower()}.")
             return
-        problems = self.draft.problems()
+        problems = self.draft.problems() + self.draft.problems_phones()
         if problems:
             QMessageBox.warning(self, "Check the return", "\n".join(problems))
             return
         doc = self._doc_id()
+        units = {}
+        for ln in self.draft.phone_lines():          # every returned phone is identified by its IMEI
+            got, n = [], int(ln["qty"])
+            for k in range(n):
+                title = f"IMEI of returned phone {k + 1} of {n}"
+                one = ask_sale_imei(self, ln["name"], ln.get("imei_mode") or "single", None, title)
+                if one is None:
+                    return
+                if one in got:
+                    QMessageBox.warning(self, "Same phone", "This phone is already entered in this return.")
+                    return
+                got.append(one)
+            units[ln["product_id"]] = got
+        items = self.draft.service_items(units)
         try:
             if self.kind == "sale":
-                trading.sale_return(self.db, pid, self.draft.service_items(), self.cash.value(), doc, self.note.text())
+                trading.sale_return(self.db, pid, items, self.cash.value(), doc, self.note.text())
             else:
-                trading.purchase_return(self.db, pid, self.draft.service_items(), self.cash.value(), doc, self.note.text())
+                trading.purchase_return(self.db, pid, items, self.cash.value(), doc, self.note.text())
         except BusinessError as exc:
             QMessageBox.warning(self, "Cannot save", str(exc))
             return
