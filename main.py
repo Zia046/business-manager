@@ -11,9 +11,33 @@ from app.ui.registration import RegistrationDialog
 from app.ui.theme import STYLESHEET
 
 
+def _install_crash_logger():
+    """The exe has no console, so any unexpected error is written to error_log.txt and shown in a box."""
+    import traceback
+    from datetime import datetime
+    from pathlib import Path
+
+    def hook(exc_type, exc, tb):
+        text = "".join(traceback.format_exception(exc_type, exc, tb))
+        try:
+            data_dir, _ = resolve_data_dir()
+            log = Path(data_dir) / "error_log.txt"
+            with open(log, "a", encoding="utf-8") as f:
+                f.write(f"\n--- {datetime.now():%Y-%m-%d %H:%M:%S} ---\n{text}")
+            where = f"\n\nDetails saved in:\n{log}"
+        except Exception:
+            where = ""
+        try:
+            QMessageBox.critical(None, APP_NAME, f"Something went wrong:\n\n{exc}{where}")
+        except Exception:
+            pass
+    sys.excepthook = hook
+
+
 def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+    _install_crash_logger()
     app.setStyleSheet(STYLESHEET)
 
     data_dir, used_fallback = resolve_data_dir()

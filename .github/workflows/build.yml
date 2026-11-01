@@ -1,0 +1,46 @@
+name: Build Windows exe
+
+on:
+  workflow_dispatch:          # "Run workflow" button in the Actions tab
+  push:
+    tags: ["v*"]              # pushing a tag like v0.1.0 also creates a Release with the exe
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build exe
+        run: >
+          pyinstaller --noconfirm --clean --onefile --windowed
+          --name BusinessManager
+          --hidden-import rapidfuzz --hidden-import arabic_reshaper
+          --hidden-import bidi --hidden-import openpyxl
+          main.py
+
+      - name: Upload exe (download it from the run page)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BusinessManager-windows
+          path: dist/BusinessManager.exe
+
+      - name: Attach exe to the GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/BusinessManager.exe

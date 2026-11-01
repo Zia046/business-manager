@@ -11,7 +11,8 @@ No internet or server needed. Data folder: `D:\BusinessManagerData` (falls back 
     python main.py
 
 ## Build the .exe
-Double-click `build_exe.bat` (runs the tests, then PyInstaller) -> `dist\BusinessManager.exe`.
+Easiest: push a tag (or use Actions > Build Windows exe > Run workflow) and GitHub builds `BusinessManager.exe` for you.
+On your own PC: double-click `build_exe.bat` (runs the tests, then PyInstaller) -> `dist\BusinessManager.exe`.
 Optional installer: open `installer.iss` in Inno Setup and Compile.
 
 ## User manual
