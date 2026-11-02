@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QMainWindow, QP
 
 from ..config import DEVELOPER_EMAIL, DEVELOPER_NAME, DEVELOPER_PHONE
 from ..services import backup, masters, reports as R
+from ..services import permissions
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
 from .theme import ACCENT, BG, HOME_BTN_BG, HOME_BTN_BORDER, HOME_BTN_HOVER, HOME_BTN_TEXT, MUTED
@@ -22,9 +23,10 @@ QPushButton:hover {{ background: {HOME_BTN_HOVER}; border: 1px solid #e58f8a; }}
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, db):
+    def __init__(self, db, user=None):
         super().__init__()
         self.db = db
+        self.user = user or {"login_id": "", "role": "owner", "name": ""}
         self.skip_exit_backup = False
         self.setStyleSheet(f"QMainWindow, QWidget#home {{ background: {BG}; }}")
         self._build_menu()
@@ -49,6 +51,8 @@ class MainWindow(QMainWindow):
             for label, key in items:
                 act = QAction(label, self)
                 act.triggered.connect(lambda _=False, k=key, l=label: open_module(self, k, l))
+                if not permissions.can_open(self.user["role"], key):
+                    act.setEnabled(False)                      # staff: owner-only items are greyed out
                 if key in SHORTCUTS and title in ("Sale/Purchase", "Payments/Receipts"):
                     act.setShortcut(QKeySequence(SHORTCUTS[key]))
                 menu.addAction(act)
@@ -61,6 +65,10 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(40, 18, 40, 30)
 
         top = QHBoxLayout()
+        who = QLabel(f"Logged in: <b>{self.user.get('name') or self.user['login_id']}</b> "
+                     f"({self.user['role']})" if self.user["login_id"] else "")
+        who.setStyleSheet(f"color: {MUTED}; font-size: 13px;")
+        top.addWidget(who)
         top.addStretch()
         self.clock = QLabel(alignment=Qt.AlignRight)
         self.clock.setStyleSheet(f"color: {MUTED}; font-size: 15px; font-weight: 600;")
@@ -83,6 +91,7 @@ class MainWindow(QMainWindow):
             btn = QPushButton(f"{i + 1}.  {label}")
             btn.setStyleSheet(HOME_BUTTON_STYLE)
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setEnabled(permissions.can_open(self.user["role"], key))
             btn.clicked.connect(lambda _=False, k=key, l=label: (open_module(self, k, l), self.refresh_dashboard()))
             grid.addWidget(btn, i // 4, i % 4)
         grid_wrap = QHBoxLayout()

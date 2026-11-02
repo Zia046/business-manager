@@ -13,7 +13,7 @@ class LoginDialog(QDialog):
     def __init__(self, data_dir: Path, parent=None):
         super().__init__(parent)
         self.data_dir = Path(data_dir)
-        self.db = None  # set on successful login
+        self.db = None  # set on successful login (db.user = who logged in)
         self.setWindowTitle("Login")
         self.setFixedWidth(400)
 

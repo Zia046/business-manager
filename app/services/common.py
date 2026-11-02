@@ -65,3 +65,49 @@ def unpost(conn, ref_type: str, ref_id: int):
     """Remove every stock/ledger/cash row created by a document (used by cancel/edit)."""
     for table in ("stock_moves", "ledger", "cash_book"):
         conn.execute(f"DELETE FROM {table} WHERE ref_type=? AND ref_id=?", (ref_type, ref_id))
+
+
+# ---------------- who is logged in, and the audit trail ----------------
+import functools
+
+_CURRENT = {"login": "", "role": "owner", "name": ""}
+
+
+def set_current_user(user: dict | None):
+    if user:
+        _CURRENT.update(login=user["login_id"], role=user.get("role") or "owner", name=user.get("name") or "")
+    else:
+        _CURRENT.update(login="", role="owner", name="")
+
+
+def current_login() -> str:
+    return _CURRENT["login"]
+
+
+def is_owner() -> bool:
+    return _CURRENT["role"] == "owner"
+
+
+def log_audit(db, action: str, detail: str = ""):
+    """Write one line to the audit log. Never raises: a logging problem must not stop real work."""
+    try:
+        with db.transaction() as c:
+            c.execute("INSERT INTO audit_log(date,user,action,detail) VALUES(?,?,?,?)",
+                      (now(), _CURRENT["login"] or "-", action, detail))
+    except Exception:
+        pass
+
+
+def audited(action, describe):
+    """Decorator for service functions whose first argument is the database."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrap(db, *a, **k):
+            res = fn(db, *a, **k)
+            try:
+                log_audit(db, action, describe(db, a, k, res))
+            except Exception:
+                pass
+            return res
+        return wrap
+    return deco

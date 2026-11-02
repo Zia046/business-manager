@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplic
                                QTableWidgetItem, QVBoxLayout)
 
 from ..services import backup, masters, trading
-from ..services.common import BusinessError
+from ..services.common import BusinessError, is_owner
 from .enter_safe import EnterSafeDialog
 from .imei_dialogs import ask_sale_imei
 from .invoice_model import InvoiceDraft
@@ -154,6 +154,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.note.setMaximumHeight(44)
         left.addWidget(self.note)
         self.show_profit = QCheckBox("Show Profit / Loss")
+        self.show_profit.setVisible(is_owner())
         self.show_profit.toggled.connect(self._recalc)
         left.addWidget(self.show_profit)
         self.profit_lbl = QLabel()

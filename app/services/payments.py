@@ -1,5 +1,5 @@
 """Cash received/paid, expenses and vouchers. Everything posts to the cash book."""
-from .common import BusinessError, next_no, now, post_cash, post_ledger, r2
+from .common import BusinessError, audited, next_no, now, post_cash, post_ledger, r2
 
 
 def _amount(a) -> float:
@@ -23,6 +23,7 @@ def _voucher(c, kind, date, party_id, amount, ref_type, ref_id, note):
     return no
 
 
+@audited("Cash received from customer", lambda db,a,k,r: f"{r}  amount {a[1] if len(a)>1 else k.get('amount')}  " + db.scalar("SELECT name FROM parties WHERE id=?",(a[0],),""))
 def receive_from_customer(db, party_id, amount, note="", date=None) -> str:
     """Cash recovery: reduces what the customer owes. Returns the receipt voucher no."""
     date, amount = date or now(), _amount(amount)
@@ -35,6 +36,7 @@ def receive_from_customer(db, party_id, amount, note="", date=None) -> str:
         return _voucher(c, "receipt", date, party_id, amount, "receipt", ref, note)
 
 
+@audited("Payment to supplier", lambda db,a,k,r: f"{r}  amount {a[1] if len(a)>1 else k.get('amount')}  " + db.scalar("SELECT name FROM parties WHERE id=?",(a[0],),""))
 def pay_supplier(db, party_id, amount, note="", date=None) -> str:
     date, amount = date or now(), _amount(amount)
     with db.transaction() as c:
@@ -46,6 +48,7 @@ def pay_supplier(db, party_id, amount, note="", date=None) -> str:
         return _voucher(c, "payment", date, party_id, amount, "payment", ref, note)
 
 
+@audited("Payment to customer", lambda db,a,k,r: f"{r}  amount {a[1] if len(a)>1 else k.get('amount')}  " + db.scalar("SELECT name FROM parties WHERE id=?",(a[0],),""))
 def pay_customer(db, party_id, amount, note="", date=None) -> str:
     """Refund / payment made to a customer (increases what they are owed, i.e. lowers balance)."""
     date, amount = date or now(), _amount(amount)
@@ -58,6 +61,7 @@ def pay_customer(db, party_id, amount, note="", date=None) -> str:
         return _voucher(c, "payment", date, party_id, amount, "customer_payment", ref, note)
 
 
+@audited("Expense", lambda db,a,k,r: f"{a[0]}  amount {a[1]}")
 def add_expense(db, category, amount, note="", date=None) -> int:
     date, amount = date or now(), _amount(amount)
     if not category.strip():
@@ -69,6 +73,7 @@ def add_expense(db, category, amount, note="", date=None) -> int:
         return eid
 
 
+@audited("Expense deleted", lambda db,a,k,r: f"expense id {a[0]}")
 def delete_expense(db, expense_id):
     with db.transaction() as c:
         c.execute("DELETE FROM cash_book WHERE ref_type='expense' AND ref_id=?", (expense_id,))

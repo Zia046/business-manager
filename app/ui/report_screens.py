@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from ..reports import builders as B
 from ..services import trading
-from ..services.common import BusinessError
+from ..services.common import BusinessError, is_owner
 from .printing import print_invoice
 from .report_window import ReportWindow
 from .sale_invoice import SaleInvoiceDialog
@@ -59,9 +59,10 @@ def open_invoice_print(win):
             QMessageBox.warning(rw, "Cancel", str(exc))
         rw.reload()
 
-    ReportWindow(win.db, B.invoice_list_report, "Invoice Print", parent=win,
-                 actions=[("Print A4", do_print("A4")), ("Print Thermal", do_print("Thermal")),
-                          ("View / Edit", edit), ("Cancel Invoice", cancel)]).exec()
+    actions = [("Print A4", do_print("A4")), ("Print Thermal", do_print("Thermal")), ("View / Edit", edit)]
+    if is_owner():
+        actions.append(("Cancel Invoice", cancel))          # staff cannot cancel bills
+    ReportWindow(win.db, B.invoice_list_report, "Invoice Print", parent=win, actions=actions).exec()
 
 
 SCREENS = {
@@ -78,4 +79,5 @@ SCREENS = {
     "invoice_print": open_invoice_print,
     "imei_search": _simple(B.imei_search_report, "IMEI Search / History", use_dates=False, filter_kind="imei"),
     "daily_closing": _simple(B.daily_closing_report, "Daily Closing"),
+    "audit_log": _simple(B.audit_log_report, "Audit Log"),
 }

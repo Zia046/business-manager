@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 11, 6]
+    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 11, 8]
     assert len(HOME_BUTTONS) == 7
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -475,7 +475,7 @@ def test_backup_restore_roundtrip(tmp_path):
     back.mkdir()
     import zipfile
     zipfile.ZipFile(safety).extractall(back)
-    db3 = Database(back, PW)
+    db3 = Database(back, PW, login_id="admin")
     assert "After Backup" in [r["name"] for r in db3.query("SELECT name FROM parties")]
     db3.close()
 
@@ -663,7 +663,8 @@ def test_migration_from_old_database():
     assert conn.execute("SELECT imei2 FROM serials").fetchone()["imei2"] is None
     assert conn.execute("SELECT serial2 FROM invoice_items").fetchall() == []
     assert conn.execute("SELECT COUNT(*) AS n FROM categories").fetchone()["n"] == 5
-    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 3
+    assert conn.execute("SELECT COUNT(*) AS n FROM repairs").fetchone()["n"] == 0
 
 
 def test_old_database_file_opens_and_upgrades(tmp_path):
@@ -963,3 +964,75 @@ def test_imei_lookup_daily_closing_dashboard(phones):
     assert d["cash"] >= 5500
     rep = B.daily_closing_report(db, "2000-01-01", "2100-01-01")
     assert rep["rows"][-1][0] == "Total" and rep["rows"][-1][1] == 1 and rep["rows"][-1][2] == "5,500.00"
+
+
+# ---------- audit log ----------
+def test_audit_log_records_important_actions(shop):
+    db, sup, cust, prod = _stocked(shop)
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 50000}], paid=1000)
+    payments.receive_from_customer(db, cust, 500)
+    payments.add_expense(db, "Tea", 80)
+    trading.cancel_invoice(db, inv)
+    rows = db.query("SELECT action, detail FROM audit_log ORDER BY id")
+    actions = [r["action"] for r in rows]
+    for a in ("Product added", "Stock purchase", "Sale invoice created", "Cash received from customer",
+              "Expense", "Sale invoice cancelled"):
+        assert a in actions, a
+    created = [r for r in rows if r["action"] == "Sale invoice created"][0]["detail"]
+    assert created.startswith("INV-") and "50,000" not in created and "50000" in created
+    recv = [r for r in rows if r["action"] == "Cash received from customer"][0]["detail"]
+    assert "500" in recv and "Ali" in recv
+
+
+# ---------- staff accounts / key slots ----------
+def test_staff_login_with_own_password_and_owner_controls(tmp_path):
+    from app.services import common
+    db = auth.register(tmp_path, "Shop", "A", "03001234567", "a@b.com", None, "owner1", PW, PW)
+    assert common.is_owner()
+    with pytest.raises(BusinessError, match="owner"):
+        auth.add_staff(db, "wrong-password", "Bilal", "bilal", "staffpw1")
+    auth.add_staff(db, PW, "Bilal", "bilal", "staffpw1")
+    with pytest.raises(BusinessError, match="already used"):
+        auth.add_staff(db, PW, "Bilal 2", "bilal", "staffpw2")
+    with pytest.raises(BusinessError, match="6 characters"):
+        auth.add_staff(db, PW, "X", "x", "123")
+    db.close()
+    # staff opens the SAME database with his own password; owner password does not work for him
+    staff = auth.login(tmp_path, "bilal", "staffpw1")
+    assert not common.is_owner() and staff.user["role"] == "staff"
+    with pytest.raises(BusinessError, match="owner"):
+        auth.add_staff(staff, "staffpw1", "Evil", "evil", "evilpw12")
+    staff.close()
+    for who, pw in (("bilal", PW), ("owner1", "staffpw1"), ("nobody", PW)):
+        with pytest.raises(BusinessError, match="Invalid"):
+            auth.login(tmp_path, who, pw)
+    # owner disables, resets, and changes his own password
+    owner = auth.login(tmp_path, "owner1", PW)
+    assert common.is_owner() and len(auth.list_users(owner)) == 2
+    auth.set_staff_active(owner, PW, "bilal", False)
+    with pytest.raises(BusinessError, match="Invalid"):
+        auth.login(tmp_path, "bilal", "staffpw1")
+    auth.set_staff_active(owner, PW, "bilal", True)
+    auth.reset_staff_password(owner, PW, "bilal", "newstaff9")
+    auth.change_credentials(owner, PW, "owner1", "ownerNEW1")
+    owner.close()
+    auth.login(tmp_path, "bilal", "newstaff9").close()
+    auth.login(tmp_path, "owner1", "ownerNEW1").close()
+    with pytest.raises(BusinessError):
+        auth.login(tmp_path, "owner1", PW)
+    # staff actions are tagged with his name in the audit log
+    s = auth.login(tmp_path, "bilal", "newstaff9")
+    masters.add_party(s, "customer", "By Staff")
+    assert s.one("SELECT user FROM audit_log WHERE action='Party added' ORDER BY id DESC")["user"] == "bilal"
+    s.close()
+    common.set_current_user(None)
+
+
+def test_old_database_without_key_slots_still_opens(tmp_path):
+    db = auth.register(tmp_path, "Shop", "A", "03001234567", "a@b.com", None, "admin", PW, PW)
+    db.close()
+    (tmp_path / "keys.json").unlink()                    # what a database from the earlier version looks like
+    db2 = auth.login(tmp_path, "admin", PW)              # opens with the old key rule and creates the slot
+    db2.close()
+    assert (tmp_path / "keys.json").exists()
+    auth.login(tmp_path, "admin", PW).close()

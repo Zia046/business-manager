@@ -86,7 +86,9 @@ class ChangePasswordDialog(QDialog):
         self.db = db
         self.setWindowTitle("Change Password / Username")
         self.setMinimumWidth(400)
-        user = db.one("SELECT login_id FROM users LIMIT 1")
+        from ..services.common import current_login
+        user = db.one("SELECT login_id FROM users WHERE login_id=?", (current_login(),)) or \
+            db.one("SELECT login_id FROM users LIMIT 1")
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(28, 24, 28, 24)

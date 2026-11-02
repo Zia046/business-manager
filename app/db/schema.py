@@ -10,6 +10,45 @@ Design notes
 - Cash in hand = SUM(cash_book in) - SUM(cash_book out).
 """
 
+V3_TABLES = """
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL, user TEXT, action TEXT NOT NULL, detail TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_log(date);
+
+CREATE TABLE IF NOT EXISTS installment_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
+    party_id INTEGER NOT NULL REFERENCES parties(id),
+    invoice_id INTEGER REFERENCES invoices(id),
+    principal REAL NOT NULL,                        -- amount to be paid in installments
+    count INTEGER NOT NULL, note TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','closed','cancelled'))
+);
+CREATE TABLE IF NOT EXISTS installments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL REFERENCES installment_plans(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL, due_date TEXT NOT NULL,
+    amount REAL NOT NULL, paid REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_installments_due ON installments(due_date);
+
+CREATE TABLE IF NOT EXISTS repairs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
+    customer_name TEXT NOT NULL, phone TEXT,
+    device TEXT NOT NULL, imei TEXT, problem TEXT,
+    estimate REAL NOT NULL DEFAULT 0,
+    charges REAL NOT NULL DEFAULT 0,                -- final amount asked from the customer
+    parts_cost REAL NOT NULL DEFAULT 0,
+    received REAL NOT NULL DEFAULT 0,               -- cash taken so far (advance + final)
+    status TEXT NOT NULL DEFAULT 'received'
+        CHECK (status IN ('received','in_progress','ready','delivered','cancelled')),
+    delivered_date TEXT, note TEXT
+);
+"""
+
 SCHEMA_SQL = """
 CREATE TABLE company (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -21,7 +60,10 @@ CREATE TABLE company (
 CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     login_id TEXT NOT NULL UNIQUE,
-    pass_hash TEXT NOT NULL
+    pass_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'owner',             -- 'owner' or 'staff'
+    name TEXT,
+    active INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE parties (
@@ -46,6 +88,7 @@ CREATE TABLE products (
     low_stock_level REAL NOT NULL DEFAULT 0,
     track_serial INTEGER NOT NULL DEFAULT 0,        -- 1 for mobile phones (IMEI tracked)
     imei_mode TEXT NOT NULL DEFAULT 'single',       -- 'single' or 'double' IMEI phone
+    warranty_months INTEGER NOT NULL DEFAULT 0,     -- default warranty given on sale (0 = none)
     active INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX idx_products_name ON products(name);
@@ -80,7 +123,8 @@ CREATE TABLE invoice_items (
     invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     product_id INTEGER NOT NULL REFERENCES products(id),
     qty REAL NOT NULL, price REAL NOT NULL, discount REAL NOT NULL DEFAULT 0,
-    unit_cost REAL NOT NULL DEFAULT 0, serial TEXT, serial2 TEXT
+    unit_cost REAL NOT NULL DEFAULT 0, serial TEXT, serial2 TEXT,
+    warranty_months INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE purchases (
@@ -172,7 +216,9 @@ INSERT INTO categories(name,is_mobile,is_system) VALUES
 CREATE UNIQUE INDEX idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL;
 """
 
-SCHEMA_VERSION = 2
+SCHEMA_SQL += V3_TABLES
+
+SCHEMA_VERSION = 3
 
 
 def migrate(conn):
@@ -191,5 +237,15 @@ def migrate(conn):
     if conn.execute("SELECT COUNT(*) AS n FROM categories").fetchone()["n"] == 0:
         conn.execute("INSERT INTO categories(name,is_mobile,is_system) VALUES "
                      "('Mobile Phone',1,1),('Accessories',0,0),('Contagious',0,0),('Disposable',0,0),('Other',0,1)")
+    for table, col, ddl in (("users", "role", "TEXT NOT NULL DEFAULT 'owner'"), ("users", "name", "TEXT"),
+                            ("users", "active", "INTEGER NOT NULL DEFAULT 1"),
+                            ("products", "warranty_months", "INTEGER NOT NULL DEFAULT 0"),
+                            ("invoice_items", "warranty_months", "INTEGER NOT NULL DEFAULT 0")):
+        have = cols(table)
+        if have and col not in have:              # (a table that does not exist at all is left alone)
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+    for stmt in V3_TABLES.split(";"):
+        if stmt.strip():
+            conn.execute(stmt)
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL")
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

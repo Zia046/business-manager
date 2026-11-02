@@ -11,7 +11,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from ..db.connection import DB_FILE, SALT_FILE
+from ..db.connection import DB_FILE, KEYS_FILE, SALT_FILE
 from .auth import BRANDING_FILE
 from .common import BusinessError
 
@@ -60,7 +60,7 @@ def create_backup(db, dest_dir=None, prefix="backup") -> Path:
         n += 1
     tmp = out.with_suffix(".tmp")
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
-        for name in (DB_FILE, SALT_FILE, BRANDING_FILE):
+        for name in (DB_FILE, SALT_FILE, KEYS_FILE, BRANDING_FILE):
             f = data_dir / name
             if f.exists():
                 z.write(f, name)
@@ -120,7 +120,9 @@ def restore_backup(db, backup_path) -> Path:
         with zipfile.ZipFile(backup_path) as z:
             z.extractall(tmp)
         tmp = Path(tmp)
-        for name in (DB_FILE, SALT_FILE, BRANDING_FILE):
+        if not (tmp / KEYS_FILE).exists():       # backup from before key slots: drop the slots of the new data
+            (data_dir / KEYS_FILE).unlink(missing_ok=True)
+        for name in (DB_FILE, SALT_FILE, KEYS_FILE, BRANDING_FILE):
             src = tmp / name
             if src.exists():
                 shutil.copyfile(src, data_dir / name)

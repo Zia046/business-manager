@@ -11,6 +11,7 @@ The (non-secret) salt is stored next to the database.
 """
 import base64
 import hashlib
+import json
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -28,6 +29,7 @@ except Exception:  # pragma: no cover
 PBKDF2_ITERATIONS = 200_000
 DB_FILE = "business.bmdb"
 SALT_FILE = "key.salt"
+KEYS_FILE = "keys.json"      # one key slot per user: the database key, locked with that user's own password
 
 
 def _dict_factory(cursor, row):
@@ -44,27 +46,68 @@ def derive_key(password: str, salt: bytes) -> bytes:
 
 
 class Database:
-    def __init__(self, data_dir: Path, password: str, create: bool = False):
+    def __init__(self, data_dir: Path, password: str, create: bool = False, login_id: str | None = None):
         self.data_dir = Path(data_dir)
         self.path = self.data_dir / DB_FILE
         self.salt_path = self.data_dir / SALT_FILE
+        self.keys_path = self.data_dir / KEYS_FILE
         self.backend = "sqlcipher" if sqlcipher3 else "fernet"
-        self._open(password, create)
+        self._open(password, create, login_id)
 
     # ---------- opening ----------
     @staticmethod
     def exists(data_dir: Path) -> bool:
         return (Path(data_dir) / DB_FILE).exists()
 
-    def _open(self, password: str, create: bool):
+    # ---------- key slots (every user unlocks the same database key with their own password) ----------
+    def _slots(self) -> dict:
+        try:
+            return json.loads(self.keys_path.read_text(encoding="utf-8")).get("slots", {})
+        except Exception:
+            return {}
+
+    def _save_slots(self, slots: dict):
+        tmp = self.keys_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"v": 1, "slots": slots}), encoding="utf-8")
+        os.replace(tmp, self.keys_path)
+
+    def set_slot(self, login_id: str, password: str):
+        """Create or replace the key slot of one user."""
+        salt = os.urandom(16)
+        wrap = Fernet(base64.urlsafe_b64encode(derive_key(password, salt)))
+        slots = self._slots()
+        slots[login_id] = {"salt": salt.hex(), "wrapped": wrap.encrypt(self._key).decode()}
+        self._save_slots(slots)
+
+    def remove_slot(self, login_id: str):
+        slots = self._slots()
+        if slots.pop(login_id, None) is not None:
+            self._save_slots(slots)
+
+    def _unlock_slot(self, login_id, password) -> bytes:
+        slot = self._slots().get((login_id or "").strip())
+        if not slot:
+            raise WrongPasswordError()
+        wrap = Fernet(base64.urlsafe_b64encode(derive_key(password, bytes.fromhex(slot["salt"]))))
+        try:
+            return wrap.decrypt(slot["wrapped"].encode())
+        except InvalidToken as exc:
+            raise WrongPasswordError() from exc
+
+    def _open(self, password: str, create: bool, login_id: str | None = None):
         if create:
             salt = os.urandom(16)
             self.salt_path.write_bytes(salt)
+            self._key = derive_key(password, salt)
+            if login_id:
+                self.set_slot(login_id, password)
         else:
             if not (self.path.exists() and self.salt_path.exists()):
                 raise FileNotFoundError("Database not found")
-            salt = self.salt_path.read_bytes()
-        self._key = derive_key(password, salt)
+            if self.keys_path.exists():
+                self._key = self._unlock_slot(login_id, password)
+            else:                                    # database made before key slots existed
+                self._key = derive_key(password, self.salt_path.read_bytes())
 
         if self.backend == "sqlcipher":
             self.conn = sqlcipher3.connect(str(self.path), isolation_level=None)

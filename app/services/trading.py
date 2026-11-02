@@ -4,7 +4,7 @@ Every function runs in ONE database transaction: if anything fails (e.g. not
 enough stock) nothing is saved, so stock, ledger and cash book stay in sync.
 """
 from . import imei
-from .common import (BusinessError, customer_balance, next_no, now, post_cash, post_ledger,
+from .common import (audited, BusinessError, customer_balance, next_no, now, post_cash, post_ledger,
                      r2, stock_qty, supplier_balance, unpost)
 
 
@@ -130,6 +130,7 @@ def _take_invoice_no(c, wanted):
     return next_no(c, "INV")
 
 
+@audited("Sale invoice created", lambda db,a,k,r: db.scalar("SELECT no||'  total '||total FROM invoices WHERE id=?",(r,),""))
 def create_invoice(db, party_id, items, discount=0.0, paid=0.0, note="", date=None,
                    allow_negative_stock=False, no=None) -> int:
     date = date or now()
@@ -144,6 +145,7 @@ def create_invoice(db, party_id, items, discount=0.0, paid=0.0, note="", date=No
         return inv_id
 
 
+@audited("Sale invoice edited", lambda db,a,k,r: db.scalar("SELECT no||'  total '||total FROM invoices WHERE id=?",(a[0],),""))
 def edit_invoice(db, invoice_id, party_id, items, discount=0.0, paid=0.0, note="",
                  allow_negative_stock=False):
     """Edit = reverse the old posting, then post the new one (single transaction)."""
@@ -161,6 +163,7 @@ def edit_invoice(db, invoice_id, party_id, items, discount=0.0, paid=0.0, note="
                       allow_negative_stock)
 
 
+@audited("Sale invoice cancelled", lambda db,a,k,r: db.scalar("SELECT no||'  total '||total FROM invoices WHERE id=?",(a[0],),""))
 def cancel_invoice(db, invoice_id):
     with db.transaction() as c:
         inv = c.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
@@ -188,6 +191,7 @@ def preview_profit(db, items, discount=0.0) -> float:
 
 
 # =============== PURCHASE ===============
+@audited("Stock purchase", lambda db,a,k,r: db.scalar("SELECT no||'  total '||total FROM purchases WHERE id=?",(r,),""))
 def create_purchase(db, supplier_id, items, paid=0.0, note="", date=None) -> int:
     """`items` need an explicit typed price - it is never auto-filled from stored data.
     Product average cost is updated with the weighted-average method."""
@@ -273,6 +277,7 @@ def returnable_items(db_or_conn, kind: str, doc_id: int):
 
 
 
+@audited("Sale return", lambda db,a,k,r: db.scalar("SELECT no||'  total '||total FROM returns WHERE id=?",(r,),""))
 def sale_return(db, party_id, items, refunded=0.0, ref_invoice_id=None, note="", date=None) -> int:
     """Customer returns goods: stock +, customer balance reduced, optional cash refund."""
     date = date or now()
@@ -336,6 +341,7 @@ def sale_return(db, party_id, items, refunded=0.0, ref_invoice_id=None, note="",
         return rid
 
 
+@audited("Purchase return", lambda db,a,k,r: db.scalar("SELECT no||'  total '||total FROM returns WHERE id=?",(r,),""))
 def purchase_return(db, supplier_id, items, received=0.0, ref_purchase_id=None, note="", date=None) -> int:
     """Goods sent back to supplier: stock -, supplier balance reduced, optional cash received."""
     date = date or now()

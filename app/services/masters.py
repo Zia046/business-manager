@@ -1,8 +1,9 @@
 """Customers, suppliers, products, company info, product search."""
-from .common import BusinessError, stock_qty
+from .common import BusinessError, audited, stock_qty
 
 
 # ---------- parties ----------
+@audited("Party added", lambda db,a,k,r: f"{a[0]}: {a[1]} (id {r})")
 def add_party(db, kind, name, phone="", address="", opening_balance=0.0) -> int:
     if kind not in ("customer", "supplier"):
         raise BusinessError("Invalid party type")
@@ -14,6 +15,7 @@ def add_party(db, kind, name, phone="", address="", opening_balance=0.0) -> int:
         return cur.lastrowid
 
 
+@audited("Party edited", lambda db,a,k,r: f"id {a[0]}: {a[1]}")
 def update_party(db, party_id, name, phone="", address="", opening_balance=0.0):
     p = db.one("SELECT * FROM parties WHERE id=?", (party_id,))
     if not p or p["is_walkin"]:
@@ -25,6 +27,7 @@ def update_party(db, party_id, name, phone="", address="", opening_balance=0.0):
                   (name.strip(), phone, address, float(opening_balance), party_id))
 
 
+@audited("Party deleted", lambda db,a,k,r: f"id {a[0]}")
 def delete_party(db, party_id):
     """Hard delete if unused, otherwise soft delete (keeps history intact)."""
     p = db.one("SELECT * FROM parties WHERE id=?", (party_id,))
@@ -83,6 +86,7 @@ def delete_category(db, category_id):
 
 
 # ---------- products ----------
+@audited("Product added", lambda db,a,k,r: f"{a[0] if a else k.get('name')} (id {r})")
 def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0, category="",
                 tags="", unit="pcs", low_stock_level=0.0, track_serial=False, imei_mode="single") -> int:
     """A category must be chosen. Mobile phones are always IMEI-tracked, must say whether they have a
@@ -113,6 +117,7 @@ def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0,
         return cur.lastrowid
 
 
+@audited("Product edited", lambda db,a,k,r: f"id {a[0]}: " + ", ".join(f"{x}={y}" for x,y in k.items()))
 def update_product(db, product_id, **fields):
     allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode"}
     bad = set(fields) - allowed
@@ -156,6 +161,7 @@ def db_has_imei(db, product_id) -> bool:
     return db.scalar("SELECT COUNT(*) FROM serials WHERE product_id=?", (product_id,)) > 0
 
 
+@audited("Product deleted", lambda db,a,k,r: f"id {a[0]}")
 def delete_product(db, product_id):
     used = db.scalar("SELECT COUNT(*) FROM stock_moves WHERE product_id=?", (product_id,))
     with db.transaction() as c:
@@ -205,6 +211,7 @@ def get_company(db):
     return db.one("SELECT * FROM company WHERE id=1")
 
 
+@audited("Company information edited", lambda db,a,k,r: str(a[0]))
 def update_company(db, name, address, phone, email, logo_path=None):
     if not all(x.strip() for x in (name, address, phone, email)):
         raise BusinessError("All company fields are required")

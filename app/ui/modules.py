@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
 from ..config import APP_NAME
+from ..services import permissions
 from . import dialogs
 from .parties import PartiesWindow
 from .products import ProductsWindow
@@ -15,6 +16,7 @@ from .backup_ui import BackupDialog, restore_dialog
 from .account_screens import open_balance_sheet, open_cash_book, open_vouchers
 from .cash_recovery import CashRecoveryDialog
 from .categories_ui import CategoriesDialog
+from .users_ui import UsersDialog
 from .printer_ui import PrinterSettingsDialog
 from .reset_ui import ResetDialog
 from .payments_ui import PaymentDialog
@@ -51,6 +53,7 @@ def _change_password(win):
 MODULES = {
     "categories": lambda win: CategoriesDialog(win.db, win).exec(),
     "printer_settings": lambda win: PrinterSettingsDialog(win.db, win).exec(),
+    "users": lambda win: UsersDialog(win.db, win).exec(),
     "reset_db": lambda win: ResetDialog(win).exec(),
     "backup": lambda win: BackupDialog(win.db, win).exec(),
     "restore": restore_dialog,
@@ -78,6 +81,10 @@ MODULES.update(SCREENS)
 
 
 def open_module(win, key: str, label: str):
+    role = (getattr(win, "user", None) or {}).get("role", "owner")
+    if not permissions.can_open(role, key):
+        QMessageBox.information(win, APP_NAME, f"'{label}' is only for the owner.")
+        return
     handler = MODULES.get(key)
     if handler:
         handler(win)

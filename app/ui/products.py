@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QFormLayout, 
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
 
 from ..services import masters
-from ..services.common import BusinessError
+from ..services.common import BusinessError, is_owner
 from .widgets import make_table, money, selected_id, set_row
 
 
@@ -57,7 +57,8 @@ class ProductForm(QDialog):
         form.addRow("IMEI type", self.imei_mode)
         form.addRow("Hash tags", self.tags)
         form.addRow("Unit", self.unit)
-        form.addRow("Purchase Price", self.purchase)
+        if is_owner():
+            form.addRow("Purchase Price", self.purchase)
         form.addRow("Sale Price", self.sale)
         form.addRow("Opening Stock", self.opening)
         form.addRow("Low-stock alert at", self.low)
@@ -136,6 +137,8 @@ class ProductsWindow(QDialog):
         lay.addLayout(top)
         self.table = make_table(["ID", "Name", "Category", "Tags", "Unit", "Avg Cost", "Sale Price", "Stock"])
         self.table.doubleClicked.connect(self.edit)
+        if not is_owner():
+            self.table.setColumnHidden(5, True)          # Avg Cost is hidden from staff
         lay.addWidget(self.table)
         self.info = QLabel()
         lay.addWidget(self.info)

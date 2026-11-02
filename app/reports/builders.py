@@ -300,3 +300,12 @@ def daily_closing_report(db, date_from, date_to):
     rep["bold_rows"].add(len(rep["rows"]) - 1)
     rep["summary"] = [("Opening cash", money(c["opening"])), ("Closing cash", money(c["closing"]))]
     return rep
+
+
+def audit_log_report(db, date_from, date_to):
+    rep = _new("Audit Log", f"{date_from}  to  {date_to}", ["Date", "User", "Action", "Detail"])
+    for r in db.query("SELECT * FROM audit_log WHERE date BETWEEN ? AND ? ORDER BY id DESC LIMIT 5000",
+                      (date_from + " 00:00:00", date_to + " 23:59:59")):
+        rep["rows"].append([r["date"][:16], r["user"] or "", r["action"], r["detail"] or ""])
+    rep["summary"] = [("Entries", str(len(rep["rows"])))]
+    return rep

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..config import LOCKOUT_SECONDS, MAX_LOGIN_ATTEMPTS
 from ..db.connection import Database, WrongPasswordError
-from .common import BusinessError
+from .common import BusinessError, log_audit, set_current_user
 
 GENERIC_ERROR = "Invalid Login ID or Password"
 LOCK_FILE = "lock.json"  # lockout state lives outside the encrypted DB (DB is unreadable before login)
@@ -86,15 +86,17 @@ def register(data_dir: Path, name, address, phone, email, logo_file, login_id,
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
         logo_path = str(dest)
-    db = Database(data_dir, password, create=True)
+    db = Database(data_dir, password, create=True, login_id=login_id.strip())
     with db.transaction() as c:
         c.execute("INSERT INTO company(id,name,address,phone,email,logo_path) VALUES(1,?,?,?,?,?)",
                   (name.strip(), address.strip(), phone.strip(), email.strip(), logo_path))
-        c.execute("INSERT INTO users(login_id,pass_hash) VALUES(?,?)",
+        c.execute("INSERT INTO users(login_id,pass_hash,role,name) VALUES(?,?,'owner','Owner')",
                   (login_id.strip(), hash_password(password)))
         # default customer used for cash sales
         c.execute("INSERT INTO parties(kind,name,is_walkin) VALUES('customer','Walk-in Customer',1)")
     write_branding(data_dir, name.strip(), logo_path, login_id.strip())
+    db.user = db.one("SELECT * FROM users WHERE login_id=?", (login_id.strip(),))
+    set_current_user(db.user)
     return db
 
 
@@ -116,9 +118,9 @@ def login(data_dir: Path, login_id: str, password: str) -> Database:
         mins = int((st["until"] - time.time()) // 60) + 1
         raise BusinessError(f"Too many failed attempts. Try again in {mins} minute(s).")
     try:
-        db = Database(data_dir, password)
+        db = Database(data_dir, password, login_id=(login_id or "").strip())
         user = db.one("SELECT * FROM users WHERE login_id=?", ((login_id or "").strip(),))
-        if not user or not verify_password(password, user["pass_hash"]):
+        if not user or not user["active"] or not verify_password(password, user["pass_hash"]):
             db.close()
             raise WrongPasswordError()
     except WrongPasswordError:
@@ -128,9 +130,14 @@ def login(data_dir: Path, login_id: str, password: str) -> Database:
         _save_lock(data_dir, st)
         raise BusinessError(GENERIC_ERROR)
     _save_lock(data_dir, {"attempts": 0, "until": 0})
+    if not db.keys_path.exists():                  # database from before key slots: add this user's slot
+        db.set_slot(user["login_id"], password)
+    set_current_user(user)
     _fix_logo_path(db, data_dir)
     brand = read_branding(data_dir)
     write_branding(data_dir, brand.get("name") or "", brand.get("logo"), user["login_id"])  # remember for next time
+    db.user = user
+    log_audit(db, "Login", user["login_id"])
     return db
 
 
@@ -147,7 +154,9 @@ def _fix_logo_path(db, data_dir: Path):
 
 def change_credentials(db: Database, current_password: str, new_login_id: str,
                        new_password: str | None):
-    user = db.one("SELECT * FROM users LIMIT 1")
+    """Changes the login id / password of the user who is logged in."""
+    from .common import current_login
+    user = db.one("SELECT * FROM users WHERE login_id=?", (current_login(),)) or db.one("SELECT * FROM users LIMIT 1")
     if not verify_password(current_password, user["pass_hash"]):
         raise BusinessError("Current password is incorrect")
     if not new_login_id.strip():
@@ -155,10 +164,75 @@ def change_credentials(db: Database, current_password: str, new_login_id: str,
     pw = new_password or current_password
     if len(pw) < 6:
         raise BusinessError("Password must be at least 6 characters")
+    new_id = new_login_id.strip()
+    if new_id != user["login_id"] and db.one("SELECT 1 FROM users WHERE login_id=?", (new_id,)):
+        raise BusinessError("This Login ID is already used")
     with db.transaction() as c:
-        c.execute("UPDATE users SET login_id=?, pass_hash=? WHERE id=?",
-                  (new_login_id.strip(), hash_password(pw), user["id"]))
-    if new_password:
-        db.rekey(new_password)  # the encryption key follows the password
+        c.execute("UPDATE users SET login_id=?, pass_hash=? WHERE id=?", (new_id, hash_password(pw), user["id"]))
+    if new_id != user["login_id"]:
+        db.remove_slot(user["login_id"])
+    db.set_slot(new_id, pw)                        # the database key is re-locked with the new password
+    set_current_user({**user, "login_id": new_id})
+    log_audit(db, "Login details changed", new_id)
     brand = read_branding(db.data_dir)
-    write_branding(db.data_dir, brand.get("name") or "", brand.get("logo"), new_login_id.strip())
+    write_branding(db.data_dir, brand.get("name") or "", brand.get("logo"), new_id)
+
+
+# ---------- staff accounts (owner only) ----------
+def _need_owner():
+    from .common import is_owner
+    if not is_owner():
+        raise BusinessError("Only the owner can manage staff accounts")
+
+
+def list_users(db):
+    return db.query("SELECT id, login_id, name, role, active FROM users ORDER BY role DESC, login_id")
+
+
+def add_staff(db, owner_password, name, login_id, password):
+    _need_owner()
+    _check_owner_password(db, owner_password)
+    login_id, name = (login_id or "").strip(), (name or "").strip()
+    if not login_id or not name:
+        raise BusinessError("Name and Login ID are required")
+    if len(password or "") < 6:
+        raise BusinessError("Password must be at least 6 characters")
+    if db.one("SELECT 1 FROM users WHERE login_id=?", (login_id,)):
+        raise BusinessError("This Login ID is already used")
+    with db.transaction() as c:
+        c.execute("INSERT INTO users(login_id,pass_hash,role,name) VALUES(?,?,'staff',?)",
+                  (login_id, hash_password(password), name))
+    db.set_slot(login_id, password)
+    log_audit(db, "Staff account added", f"{name} ({login_id})")
+
+
+def reset_staff_password(db, owner_password, login_id, new_password):
+    _need_owner()
+    _check_owner_password(db, owner_password)
+    if len(new_password or "") < 6:
+        raise BusinessError("Password must be at least 6 characters")
+    user = db.one("SELECT * FROM users WHERE login_id=? AND role='staff'", (login_id,))
+    if not user:
+        raise BusinessError("Staff account not found")
+    with db.transaction() as c:
+        c.execute("UPDATE users SET pass_hash=? WHERE id=?", (hash_password(new_password), user["id"]))
+    db.set_slot(login_id, new_password)
+    log_audit(db, "Staff password reset", login_id)
+
+
+def set_staff_active(db, owner_password, login_id, active: bool):
+    _need_owner()
+    _check_owner_password(db, owner_password)
+    user = db.one("SELECT * FROM users WHERE login_id=? AND role='staff'", (login_id,))
+    if not user:
+        raise BusinessError("Staff account not found")
+    with db.transaction() as c:
+        c.execute("UPDATE users SET active=? WHERE id=?", (1 if active else 0, user["id"]))
+    log_audit(db, "Staff account " + ("enabled" if active else "disabled"), login_id)
+
+
+def _check_owner_password(db, password):
+    from .common import current_login
+    me = db.one("SELECT * FROM users WHERE login_id=?", (current_login(),))
+    if not me or not verify_password(password or "", me["pass_hash"]):
+        raise BusinessError("Your (owner) password is incorrect")

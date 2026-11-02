@@ -6,7 +6,7 @@ and the action is written to reset_log.txt. The screen asks for two confirmation
 from datetime import datetime
 from pathlib import Path
 
-from ..db.connection import DB_FILE, SALT_FILE
+from ..db.connection import DB_FILE, KEYS_FILE, SALT_FILE
 from . import backup
 from .auth import BRANDING_FILE, verify_password
 from .common import BusinessError, customer_balance, now, r2, supplier_balance
@@ -44,7 +44,10 @@ def reset_data(db, password, reason, options) -> dict:
     reason = (reason or "").strip()
     if len(reason) < 5:
         raise BusinessError("Write the reason for the reset (at least 5 letters)")
-    user = db.one("SELECT * FROM users LIMIT 1")
+    from .common import is_owner
+    if not is_owner():
+        raise BusinessError("Only the owner can reset the database")
+    user = db.one("SELECT * FROM users WHERE role='owner' ORDER BY id LIMIT 1")
     if not password or not verify_password(password, user["pass_hash"]):
         raise BusinessError("Current password is incorrect")
     opts = expand(options)
@@ -57,7 +60,7 @@ def reset_data(db, password, reason, options) -> dict:
 
     if "factory" in opts:
         db.close()
-        for name in (DB_FILE, SALT_FILE, BRANDING_FILE, backup.SETTINGS_FILE, "lock.json"):
+        for name in (DB_FILE, SALT_FILE, KEYS_FILE, BRANDING_FILE, backup.SETTINGS_FILE, "lock.json"):
             (data_dir / name).unlink(missing_ok=True)
         logo = data_dir / "logo"
         if logo.exists():

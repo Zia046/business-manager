@@ -66,7 +66,7 @@ def run() -> int:
     if login.exec() != QDialog.Accepted:
         return 0
 
-    window = MainWindow(login.db)
+    window = MainWindow(login.db, login.db.user)
     window.show()
     return app.exec()
 
