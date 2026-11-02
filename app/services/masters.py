@@ -86,14 +86,26 @@ def delete_category(db, category_id):
 
 
 # ---------- products ----------
+def _months(v) -> int:
+    try:
+        n = int(v or 0)
+    except (TypeError, ValueError):
+        raise BusinessError("Warranty must be a number of months")
+    if not 0 <= n <= 120:
+        raise BusinessError("Warranty must be between 0 and 120 months")
+    return n
+
+
 @audited("Product added", lambda db,a,k,r: f"{a[0] if a else k.get('name')} (id {r})")
 def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0, category="",
-                tags="", unit="pcs", low_stock_level=0.0, track_serial=False, imei_mode="single") -> int:
+                tags="", unit="pcs", low_stock_level=0.0, track_serial=False, imei_mode="single",
+                warranty_months=0) -> int:
     """A category must be chosen. Mobile phones are always IMEI-tracked, must say whether they have a
     single or double IMEI, and cannot have an opening stock (phones enter stock through Stock Purchase,
     where every IMEI number is compulsory)."""
     if not name.strip():
         raise BusinessError("Product name is required")
+    warranty_months = _months(warranty_months)
     if min(sale_price, purchase_price, opening_stock) < 0:
         raise BusinessError("Prices and stock cannot be negative")
     cat = get_category(db, category)
@@ -111,15 +123,15 @@ def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0,
     with db.transaction() as c:
         cur = c.execute(
             "INSERT INTO products(name,category,tags,unit,last_purchase_price,avg_cost,sale_price,"
-            "opening_stock,low_stock_level,track_serial,imei_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            "opening_stock,low_stock_level,track_serial,imei_mode,warranty_months) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (name.strip(), cat["name"], tags, unit, purchase_price, purchase_price, sale_price,
-             opening_stock, low_stock_level, int(mobile), imei_mode))
+             opening_stock, low_stock_level, int(mobile), imei_mode, warranty_months))
         return cur.lastrowid
 
 
 @audited("Product edited", lambda db,a,k,r: f"id {a[0]}: " + ", ".join(f"{x}={y}" for x,y in k.items()))
 def update_product(db, product_id, **fields):
-    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode"}
+    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode", "warranty_months"}
     bad = set(fields) - allowed
     if bad:
         raise BusinessError(f"Cannot edit: {', '.join(sorted(bad))}")
@@ -130,6 +142,8 @@ def update_product(db, product_id, **fields):
         raise BusinessError("Product not found")
     if "name" in fields and not str(fields["name"]).strip():
         raise BusinessError("Product name is required")
+    if "warranty_months" in fields:
+        fields["warranty_months"] = _months(fields["warranty_months"])
     has_history = db.scalar("SELECT COUNT(*) FROM stock_moves WHERE product_id=?", (product_id,)) > 0
     if "category" in fields:
         cat = get_category(db, fields["category"])

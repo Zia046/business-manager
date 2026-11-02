@@ -64,11 +64,12 @@ def _post_invoice(c, inv_id, no, date, party, items, discount, paid, note, allow
             if qty != 1:
                 raise BusinessError(f"'{p['name']}': sell each phone on its own line with its IMEI")
             unit_row = check_sale_unit(c, p, it.get("serial"), it.get("serial2"))
-        c.execute("INSERT INTO invoice_items(invoice_id,product_id,qty,price,discount,unit_cost,serial,serial2)"
-                  " VALUES(?,?,?,?,?,?,?,?)",
+        warranty = int(it["warranty_months"]) if it.get("warranty_months") is not None else p["warranty_months"]
+        c.execute("INSERT INTO invoice_items(invoice_id,product_id,qty,price,discount,unit_cost,serial,serial2,"
+                  "warranty_months) VALUES(?,?,?,?,?,?,?,?,?)",
                   (inv_id, p["id"], qty, price, disc, p["avg_cost"],
                    unit_row["serial"] if unit_row else it.get("serial"),
-                   unit_row["imei2"] if unit_row else None))
+                   unit_row["imei2"] if unit_row else None, warranty))
         c.execute("INSERT INTO stock_moves(product_id,date,qty,unit_cost,ref_type,ref_id) "
                   "VALUES(?,?,?,?,'invoice',?)", (p["id"], date, -qty, p["avg_cost"], inv_id))
         if unit_row:

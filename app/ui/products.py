@@ -1,7 +1,7 @@
 """Products screen: search, add, edit, delete, low-stock highlight."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QSpinBox, QFormLayout, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
 
 from ..services import masters
@@ -49,6 +49,11 @@ class ProductForm(QDialog):
         self.sale = _spin(p.get("sale_price", 0))
         self.opening = _spin(p.get("opening_stock", 0), 3)
         self.low = _spin(p.get("low_stock_level", 0), 3)
+        self.warranty = QSpinBox()
+        self.warranty.setRange(0, 120)
+        self.warranty.setSuffix(" month(s)")
+        self.warranty.setSpecialValueText("No warranty")
+        self.warranty.setValue(int(p.get("warranty_months") or 0))
         if product:  # cost and opening stock change only through purchases/sales
             self.purchase.setEnabled(False)
             self.opening.setEnabled(False)
@@ -62,6 +67,7 @@ class ProductForm(QDialog):
         form.addRow("Sale Price", self.sale)
         form.addRow("Opening Stock", self.opening)
         form.addRow("Low-stock alert at", self.low)
+        form.addRow("Warranty on sale", self.warranty)
         lay.addLayout(form)
         self.hint = QLabel("")
         self.hint.setObjectName("subtitle")
@@ -103,13 +109,14 @@ class ProductForm(QDialog):
                 masters.update_product(self.db, self.product["id"], name=self.name.text().strip(),
                                        category=cat, tags=self.tags.text(), unit=self.unit.text(),
                                        sale_price=self.sale.value(), low_stock_level=self.low.value(),
-                                       imei_mode=mode)
+                                       imei_mode=mode, warranty_months=self.warranty.value())
                 self.saved_id = self.product["id"]
             else:
                 self.saved_id = masters.add_product(
                     self.db, self.name.text(), self.sale.value(), self.purchase.value(),
                     self.opening.value(), cat, self.tags.text(), self.unit.text(),
-                    self.low.value(), imei_mode=mode)
+                    self.low.value(), imei_mode=mode,
+                    warranty_months=self.warranty.value())
         except BusinessError as exc:
             self.error.setText(str(exc))
             return

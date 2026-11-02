@@ -271,10 +271,23 @@ def invoice_list_report(db, date_from, date_to):
     return rep
 
 
+def _warranty_text(r) -> str:
+    from datetime import date
+    from ..services.common import add_months
+    months = r.get("warranty_months") or 0
+    if r["status"] != "sold" or not r.get("invoice_date"):
+        return ""
+    if not months:
+        return "No warranty"
+    until = add_months(r["invoice_date"][:10], months)
+    state = "valid" if date.today().isoformat() <= until else "EXPIRED"
+    return f"till {until[8:10]}-{until[5:7]}-{until[:4]} ({state})"
+
+
 def imei_search_report(db, text=""):
     rep = _new("IMEI Search / History", "Type at least 3 digits of an IMEI and press Enter",
                ["IMEI 1", "IMEI 2", "Phone", "Status", "Bought from", "Purchase", "Sold to", "Invoice", "Sold on",
-                "Sold price"], (9,))
+                "Sold price", "Warranty"], (9,))
     rows = R.imei_lookup(db, text)
     for r in rows:
         rep["rows"].append([r["serial"], r["imei2"] or "", r["product"],
@@ -282,7 +295,7 @@ def imei_search_report(db, text=""):
                             f"{r['purchase_no'] or ''} {(r['purchase_date'] or '')[:10]}".strip(),
                             (r["customer"] or "") + (f" ({r['cphone']})" if r["cphone"] else ""),
                             r["invoice_no"] or "", (r["invoice_date"] or "")[:10],
-                            money(r["sold_price"]) if r["sold_price"] is not None else ""])
+                            money(r["sold_price"]) if r["sold_price"] is not None else "", _warranty_text(r)])
     rep["summary"] = [("Found", str(len(rows)))]
     return rep
 

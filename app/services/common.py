@@ -111,3 +111,13 @@ def audited(action, describe):
             return res
         return wrap
     return deco
+
+
+def add_months(day: str, months: int) -> str:
+    """'2026-11-02' + 12 months = '2027-11-02' (the day is clamped, e.g. 31 Jan + 1 month = 28/29 Feb)."""
+    import calendar
+    from datetime import date as _date
+    y, m, d = int(day[:4]), int(day[5:7]), int(day[8:10])
+    m0 = m - 1 + int(months)
+    y, m = y + m0 // 12, m0 % 12 + 1
+    return _date(y, m, min(d, calendar.monthrange(y, m)[1])).isoformat()

@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 11, 8]
+    assert [len(i) for _, i in MENUS] == [6, 4, 4, 3, 11, 8]
     assert len(HOME_BUTTONS) == 7
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -1036,3 +1036,98 @@ def test_old_database_without_key_slots_still_opens(tmp_path):
     db2.close()
     assert (tmp_path / "keys.json").exists()
     auth.login(tmp_path, "admin", PW).close()
+
+
+# ---------- warranty ----------
+def test_warranty_on_bill_and_imei_search(phones, tmp_path):
+    import shutil, subprocess
+    from datetime import date
+    from app.reports import builders as B
+    from app.reports.invoice_pdf import build_invoice_pdf
+    from app.services.common import add_months
+    assert add_months("2026-01-31", 1) == "2026-02-28" and add_months("2026-11-02", 12) == "2027-11-02"
+    db, sup, cust, single, double = phones
+    with pytest.raises(BusinessError, match="120"):
+        masters.update_product(db, single, warranty_months=500)
+    masters.update_product(db, single, warranty_months=12)
+    inv = trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 5500, "serial": I1}], paid=5500)
+    assert db.scalar("SELECT warranty_months FROM invoice_items WHERE invoice_id=?", (inv,)) == 12
+    masters.update_product(db, single, warranty_months=3)             # later change does not touch old bills
+    assert db.scalar("SELECT warranty_months FROM invoice_items WHERE invoice_id=?", (inv,)) == 12
+    row = B.imei_search_report(db, I1)["rows"][0]
+    until = add_months(date.today().isoformat(), 12)
+    assert until[:4] in row[10] and "valid" in row[10]
+    assert B.imei_search_report(db, I3)["rows"][0][10] == ""          # not sold: no warranty text
+    if shutil.which("pdftotext"):
+        out = build_invoice_pdf(db, inv, tmp_path / "w.pdf", "A4")
+        text = subprocess.run(["pdftotext", out, "-"], capture_output=True, text=True).stdout
+        assert "Warranty: 12 month(s)" in text
+
+
+# ---------- warranty ----------
+def test_warranty_on_bill_and_imei_search(phones, tmp_path):
+    import shutil, subprocess
+    from datetime import date
+    from app.reports import builders as B
+    from app.reports.invoice_pdf import build_invoice_pdf
+    from app.services.common import add_months
+    assert add_months("2026-01-31", 1) == "2026-02-28" and add_months("2026-11-02", 12) == "2027-11-02"
+    db, sup, cust, single, double = phones
+    with pytest.raises(BusinessError, match="120"):
+        masters.update_product(db, single, warranty_months=500)
+    masters.update_product(db, single, warranty_months=12)
+    inv = trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 5500, "serial": I1}], paid=5500)
+    assert db.scalar("SELECT warranty_months FROM invoice_items WHERE invoice_id=?", (inv,)) == 12
+    masters.update_product(db, single, warranty_months=3)             # later change does not touch old bills
+    assert db.scalar("SELECT warranty_months FROM invoice_items WHERE invoice_id=?", (inv,)) == 12
+    row = B.imei_search_report(db, I1)["rows"][0]
+    until = add_months(date.today().isoformat(), 12)
+    assert until[:4] in row[10] and "valid" in row[10]
+    assert B.imei_search_report(db, I3)["rows"][0][10] == ""          # not sold: no warranty text
+    if shutil.which("pdftotext"):
+        out = build_invoice_pdf(db, inv, tmp_path / "w.pdf", "A4")
+        text = subprocess.run(["pdftotext", out, "-"], capture_output=True, text=True).stdout
+        assert "Warranty: 12 month(s)" in text
+
+
+# ---------- Excel / CSV import ----------
+def test_import_products_and_parties_from_excel_and_csv(shop, tmp_path):
+    from app.services import importer
+    db, sup, cust, prod = shop
+    tpl = tmp_path / "t.xlsx"
+    importer.write_template(tpl, "products")
+    rows = importer.read_rows(tpl)                                    # the template's two example rows
+    assert [r["name"] for r in rows] == ["Samsung A15 128GB", "Fast Charger 25W"]
+    csv_file = tmp_path / "p.csv"
+    csv_file.write_text("Name,Category,Sale Price,Purchase Price,Opening Stock,Tags,Unit,Low Stock Level,Warranty Months\n"
+                        "Charger 20W,Accessories,\"1,500\",900,10,#charger,pcs,2,6\n"
+                        "Vivo Y18,Mobile Phone,30000,27000,5,#vivo,pcs,1,12\n"
+                        "Bad Category Item,Gadgets,100,50,1,,,0,0\n"
+                        ",Accessories,1,1,1,,,0,0\n"
+                        "Charger 20W,Accessories,1,1,1,,,0,0\n"
+                        "Cable,Accessories,abc,1,1,,,0,0\n", encoding="utf-8")
+    rows = importer.read_rows(csv_file)
+    dry = importer.import_products(db, rows, dry_run=True)
+    assert [r["status"] for r in dry] == ["new", "new", "error", "error", "skip", "error"]
+    assert db.scalar("SELECT COUNT(*) FROM products WHERE name='Charger 20W'") == 0     # a dry run saves nothing
+    res = importer.import_products(db, rows)
+    assert [r["status"] for r in res] == ["new", "new", "error", "error", "skip", "error"]
+    ch = db.one("SELECT * FROM products WHERE name='Charger 20W'")
+    assert ch["sale_price"] == 1500 and ch["opening_stock"] == 10 and ch["warranty_months"] == 6
+    vivo = db.one("SELECT * FROM products WHERE name='Vivo Y18'")
+    assert vivo["track_serial"] == 1 and vivo["opening_stock"] == 0           # phone stock must come with IMEIs
+    assert "IMEI" in res[1]["message"]
+    again = importer.import_products(db, rows)
+    assert [r["status"] for r in again][:2] == ["skip", "skip"]                # importing twice adds nothing new
+    pf = tmp_path / "c.csv"
+    pf.write_text("Name,Phone,Address,Opening Balance\nZaid,0300,Buner,2500\nAli,0301,x,0\n", encoding="utf-8")
+    res = importer.import_parties(db, importer.read_rows(pf), "customer")
+    assert [r["status"] for r in res] == ["new", "skip"]                      # 'Ali' already exists in the fixture
+    zaid = db.one("SELECT id FROM parties WHERE name='Zaid'")["id"]
+    assert customer_balance(db.conn, zaid) == 2500
+    wrong = tmp_path / "w.csv"
+    wrong.write_text("Item,Price\nA,1\n", encoding="utf-8")
+    with pytest.raises(BusinessError, match="columns"):
+        importer.import_products(db, importer.read_rows(wrong))
+    with pytest.raises(BusinessError, match="Excel"):
+        importer.read_rows(tmp_path / "x.txt")

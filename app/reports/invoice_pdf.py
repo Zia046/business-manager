@@ -11,6 +11,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle)
 
 from ..config import SOFTWARE_CONTACT_LINE
+from ..services.common import add_months
 from ..services import reports
 
 ACCENT = colors.HexColor("#1b6ef3")
@@ -72,6 +73,15 @@ def _imei_html(it, small: int) -> str:
     else:
         text = f"IMEI: {_esc(it['serial'])}"
     return f"<br/><font size={small} color='#374151'>{text}</font>"
+
+
+def _warranty_html(it, sale_date: str, small: int) -> str:
+    months = it.get("warranty_months") or 0
+    if not months:
+        return ""
+    until = add_months(sale_date[:10], months)
+    return (f"<br/><font size={small} color='#374151'>Warranty: {months} month(s), till "
+            f"{until[8:10]}-{until[5:7]}-{until[:4]}</font>")
 
 
 def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
@@ -146,7 +156,7 @@ def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
         widths = [usable * 0.52, usable * 0.14, usable * 0.34]
         for it in d["items"]:
             amount = it["qty"] * it["price"] - it["discount"]
-            rows.append([Paragraph(f"{_esc(it['product_name'])}{_imei_html(it, fs - 1)}<br/>@ {_m(it['price'])}", s_norm),
+            rows.append([Paragraph(f"{_esc(it['product_name'])}{_imei_html(it, fs - 1)}{_warranty_html(it, inv['date'], fs - 1)}<br/>@ {_m(it['price'])}", s_norm),
                          Paragraph(_qty(it["qty"]), s_norm), Paragraph(_m(amount), s_right)])
         numeric = (1, 2)
     else:
@@ -157,7 +167,7 @@ def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
                   18 * mm, 30 * mm, 24 * mm, 32 * mm]
         for i, it in enumerate(d["items"], 1):
             amount = it["qty"] * it["price"] - it["discount"]
-            desc = _esc(it["product_name"]) + _imei_html(it, fs - 1)
+            desc = _esc(it["product_name"]) + _imei_html(it, fs - 1) + _warranty_html(it, inv["date"], fs - 1)
             rows.append([Paragraph(str(i), s_norm), Paragraph(desc, s_norm), Paragraph(_qty(it["qty"]), s_right),
                          Paragraph(_m(it["price"]), s_right), Paragraph(_m(it["discount"]) if it["discount"] else "-", s_right),
                          Paragraph(_m(amount), s_right)])
