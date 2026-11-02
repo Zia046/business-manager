@@ -84,3 +84,11 @@ Front page par "Developed by Burhan Nexus, 03475093446, ziaullah.046@gmail.com" 
 **Activation:** pehli dafa software "Machine Code" dikhata hai. Ye code Burhan Nexus (03475093446) ko bhejein. Wahan se aap ko Activation Key milegi; usay paste kar ke Activate dabayein. Key sirf usi computer par chalti hai.
 
 **Owner ke liye (key banana):** `KeyGenerator.exe` (GitHub Actions ke artifact `KeyGenerator` mein) aur `license_private.key` ek hi folder mein rakhein. Customer ka Machine Code paste karein, muddat chunein, Generate dabayein, aur Key customer ko bhej dein. `license_private.key` kisi ko na dein aur 2 jagah backup rakhein; ye kho gayi to nayi keys nahi ban sakengi.
+
+## Printer Settings (naya)
+**Utilities > Printer Settings** mein:
+- **Thermal printer** chunein (receipt ke liye) aur **A4 printer** chunein (invoice/voucher ke liye). "Windows default printer" chunne se bill seedha print hota hai, PDF window nahi khulti. "Ask every time" chunne se pehle jaisa PDF khulta hai.
+- **Thermal paper width:** 80 mm ya 58 mm roll.
+- **Sale invoice prints as:** Thermal ya A4 (Sale Invoice window mein har bill par badal bhi sakte hain).
+- **Test Print** se printer jaanch lein. Printer ka driver pehle Windows mein install hona chahiye, phir **Refresh Printers** dabayein.
+Agar seedha print na ho sake to bill PDF mein khul jata hai, bill zaya nahi hota.

@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 9, 5]
+    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 9, 6]
     assert len(HOME_BUTTONS) == 7
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -910,3 +910,37 @@ def test_installer_and_workflow_files_are_wired():
     wf = open(".github/workflows/build.yml", encoding="utf-8").read()
     assert "ISCC.exe" in wf and "KeyGenerator" in wf and "--onedir" in wf
     assert "license_private" not in wf
+
+
+# ---------- printer settings ----------
+def test_58mm_and_80mm_bills_and_test_receipt(shop, tmp_path):
+    from app.reports.invoice_pdf import build_invoice_pdf
+    from app.reports.test_page import build_test_receipt
+    db, sup, cust, prod = _stocked(shop)
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 50000}])
+    for size in ("58mm", "80mm"):
+        out = build_invoice_pdf(db, inv, tmp_path / f"{size}.pdf", size)
+        assert open(out, "rb").read().startswith(b"%PDF")
+    assert open(build_test_receipt(tmp_path, 58), "rb").read().startswith(b"%PDF")
+
+
+def test_printing_goes_to_chosen_printer_or_viewer(shop, tmp_path, monkeypatch):
+    from app.services import backup
+    ui = _import_with_qt_stub("app.ui.printing")
+    db, sup, cust, prod = _stocked(shop)
+    opened, printed = [], []
+    monkeypatch.setattr(ui, "open_file", lambda p: opened.append(str(p)))
+    import types, sys
+    fake = types.ModuleType("app.ui.direct_print")
+    fake.direct_print = lambda p, name=None: printed.append(name)
+    monkeypatch.setitem(sys.modules, "app.ui.direct_print", fake)
+    s = backup.get_settings(db.data_dir)
+    assert s["thermal_printer"] == "" and s["thermal_width"] == 80
+    assert ui.deliver(db, tmp_path / "x.pdf", thermal=True) == "viewer" and len(opened) == 1
+    backup.save_settings(db.data_dir, thermal_printer="XP-80C", a4_printer="__default__")
+    assert ui.deliver(db, tmp_path / "x.pdf", thermal=True) == "printer" and printed == ["XP-80C"]
+    assert ui.deliver(db, tmp_path / "x.pdf", thermal=False) == "printer" and printed[-1] is None
+    fake.direct_print = lambda p, name=None: (_ for _ in ()).throw(RuntimeError("offline"))
+    assert ui.deliver(db, tmp_path / "x.pdf", thermal=True) == "viewer"      # failure never loses the bill
+    backup.save_settings(db.data_dir, thermal_width=58)
+    assert ui.resolve_size(db, "Thermal") == "58mm" and ui.resolve_size(db, "A4") == "A4"

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QAbstractItemDelegate, QAbstractItemView, QApplic
                                QLineEdit, QListWidget, QMessageBox, QPlainTextEdit, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout)
 
-from ..services import masters, trading
+from ..services import backup, masters, trading
 from ..services.common import BusinessError
 from .enter_safe import EnterSafeDialog
 from .imei_dialogs import ask_sale_imei
@@ -188,7 +188,10 @@ class SaleInvoiceDialog(EnterSafeDialog):
         # ---- buttons ----
         btns = QHBoxLayout()
         self.size = QComboBox()
-        self.size.addItems(["A4", "80mm"])
+        s = backup.get_settings(self.db.data_dir)
+        self.size.addItem(f"Thermal ({int(s['thermal_width'])}mm)", "Thermal")
+        self.size.addItem("A4", "A4")
+        self.size.setCurrentIndex(1 if s.get("default_bill") == "a4" else 0)
         btns.addWidget(QLabel("Print size:"))
         btns.addWidget(self.size)
         btns.addStretch()
@@ -434,7 +437,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         no = self.db.scalar("SELECT no FROM invoices WHERE id=?", (saved,), "")
         if print_after:
             try:
-                print_invoice(self.db, saved, self.size.currentText())
+                print_invoice(self.db, saved, self.size.currentData())
             except Exception as exc:  # printing problems must never lose the saved invoice
                 QMessageBox.warning(self, "Print", f"Invoice {no} was saved, but printing failed:\n{exc}")
         else:

@@ -75,16 +75,17 @@ def _imei_html(it, small: int) -> str:
 
 
 def build_invoice_pdf(db, invoice_id: int, out_path, size: str = "A4") -> str:
-    """size: 'A4' or '80mm'. Returns the file path."""
+    """size: 'A4', or a thermal roll width such as '80mm' / '58mm'. Returns the file path."""
     d = reports.invoice_detail(db, invoice_id)
     if d is None:
         raise ValueError("Invoice not found")
-    thermal = size == "80mm"
+    thermal = size != "A4"
+    roll_mm = int(size[:-2]) if thermal else 0
     reg, bold = _fonts()
     inv, co, party = d["invoice"], d["company"], d["party"]
     fs = 8 if thermal else 10
-    page_w = 80 * mm if thermal else A4[0]
-    margin = 4 * mm if thermal else 16 * mm
+    page_w = roll_mm * mm if thermal else A4[0]
+    margin = (3 if roll_mm <= 58 else 4) * mm if thermal else 16 * mm
     usable = page_w - 2 * margin - 12  # 12pt = default frame padding, keeps tables aligned with text
 
     def st(name, **kw):

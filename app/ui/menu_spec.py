@@ -55,6 +55,7 @@ MENUS = [
         ("Restore Backup", "restore"),
         ("About", "about"),
         ("Change Password / Username", "change_password"),
+        ("Printer Settings", "printer_settings"),
         ("Reset Database", "reset_db"),
     ]),
 ]
@@ -68,7 +69,7 @@ IMPLEMENTED = {"company_edit", "about", "change_password", "customers", "supplie
                "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return",
                "customer_transactions", "cash_received_report", "profit_loss", "invoice_wise", "stock_position",
                "product_ledger", "all_balances", "products_report", "outstanding", "sale_summary", "invoice_print",
-               "backup", "restore", "categories", "reset_db"}
+               "backup", "restore", "categories", "reset_db", "printer_settings"}
 
 
 def all_keys():

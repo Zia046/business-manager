@@ -23,7 +23,9 @@ _REQUIRED = (DB_FILE, SALT_FILE)
 
 # ---------- settings (stored outside the encrypted DB so they are readable at exit) ----------
 def get_settings(data_dir) -> dict:
-    defaults = {"auto_backup": True, "extra_folder": ""}
+    defaults = {"auto_backup": True, "extra_folder": "",
+                "thermal_printer": "", "a4_printer": "",       # "" = open the PDF viewer, "__default__" = Windows default
+                "thermal_width": 80, "default_bill": "thermal"}
     try:
         defaults.update(json.loads((Path(data_dir) / SETTINGS_FILE).read_text(encoding="utf-8")))
     except Exception:

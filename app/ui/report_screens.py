@@ -60,7 +60,7 @@ def open_invoice_print(win):
         rw.reload()
 
     ReportWindow(win.db, B.invoice_list_report, "Invoice Print", parent=win,
-                 actions=[("Print A4", do_print("A4")), ("Print 80mm", do_print("80mm")),
+                 actions=[("Print A4", do_print("A4")), ("Print Thermal", do_print("Thermal")),
                           ("View / Edit", edit), ("Cancel Invoice", cancel)]).exec()
 
 
