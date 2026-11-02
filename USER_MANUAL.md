@@ -92,3 +92,8 @@ Front page par "Developed by Burhan Nexus, 03475093446, ziaullah.046@gmail.com" 
 - **Sale invoice prints as:** Thermal ya A4 (Sale Invoice window mein har bill par badal bhi sakte hain).
 - **Test Print** se printer jaanch lein. Printer ka driver pehle Windows mein install hona chahiye, phir **Refresh Printers** dabayein.
 Agar seedha print na ho sake to bill PDF mein khul jata hai, bill zaya nahi hota.
+
+## IMEI Search, Daily Closing, Home cards (naya)
+- **Reports > IMEI Search / History:** IMEI ke 3+ digits likh kar Enter dabayein. Phone kis se kharida, kab bika, kis customer ko, kis rate par, sab nazar aata hai (warranty ya complaint ke liye).
+- **Reports > Daily Closing:** har din ke bills, sale, cash in/out, kharche aur net cash. Ek din ke liye From aur To mein wohi tarikh rakhein.
+- **Home page cards:** aaj ki sale, cash in hand, customers ke baqayajat, low-stock items aur stock mein phones. Ye har 20 second mein khud update hote hain.

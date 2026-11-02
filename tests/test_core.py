@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 9, 6]
+    assert [len(i) for _, i in MENUS] == [5, 4, 4, 3, 11, 6]
     assert len(HOME_BUTTONS) == 7
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -944,3 +944,22 @@ def test_printing_goes_to_chosen_printer_or_viewer(shop, tmp_path, monkeypatch):
     assert ui.deliver(db, tmp_path / "x.pdf", thermal=True) == "viewer"      # failure never loses the bill
     backup.save_settings(db.data_dir, thermal_width=58)
     assert ui.resolve_size(db, "Thermal") == "58mm" and ui.resolve_size(db, "A4") == "A4"
+
+
+# ---------- phone-shop helpers: IMEI search, daily closing, dashboard ----------
+def test_imei_lookup_daily_closing_dashboard(phones):
+    from app.reports import builders as B
+    db, sup, cust, single, double = phones
+    trading.create_invoice(db, cust, [{"product_id": single, "qty": 1, "price": 5500, "serial": I1}], paid=5500)
+    rep = B.imei_search_report(db, I1[3:9])
+    row = rep["rows"][0]
+    assert row[0] == I1 and row[3] == "SOLD" and row[9] == "5,500.00"
+    assert row[4] == "Phone Supplier" and row[6].startswith("Ali") and row[7].startswith("INV-")
+    assert B.imei_search_report(db, I3)["rows"][0][3] == "In stock"
+    assert B.imei_search_report(db, I4)["rows"][0][1] == I4                   # IMEI 2 is searchable too
+    assert B.imei_search_report(db, "12")["rows"] == []                  # too short: no search
+    d = reports.dashboard(db)
+    assert d["today_sales"] == 5500 and d["today_invoices"] == 1 and d["phones_in_stock"] == 2
+    assert d["cash"] >= 5500
+    rep = B.daily_closing_report(db, "2000-01-01", "2100-01-01")
+    assert rep["rows"][-1][0] == "Total" and rep["rows"][-1][1] == 1 and rep["rows"][-1][2] == "5,500.00"

@@ -76,4 +76,6 @@ SCREENS = {
     "outstanding": _simple(B.outstanding_report, "Outstanding / Baqayajat", use_dates=False),
     "sale_summary": _simple(B.sale_summary_report, "Sale Summary"),
     "invoice_print": open_invoice_print,
+    "imei_search": _simple(B.imei_search_report, "IMEI Search / History", use_dates=False, filter_kind="imei"),
+    "daily_closing": _simple(B.daily_closing_report, "Daily Closing"),
 }

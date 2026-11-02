@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QMainWindow, QP
                                QVBoxLayout, QWidget)
 
 from ..config import DEVELOPER_EMAIL, DEVELOPER_NAME, DEVELOPER_PHONE
-from ..services import backup, masters
+from ..services import backup, masters, reports as R
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
 from .theme import ACCENT, BG, HOME_BTN_BG, HOME_BTN_BORDER, HOME_BTN_HOVER, HOME_BTN_TEXT, MUTED
@@ -31,6 +31,10 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("F2"), self, activated=lambda: open_module(self, "sale_invoice", "Sale Invoice"))
         self._build_home()
         self.refresh_header()
+        self.refresh_dashboard()
+        dash = QTimer(self)
+        dash.timeout.connect(self.refresh_dashboard)
+        dash.start(20000)
         self._tick()
         timer = QTimer(self)  # live clock, updates every second
         timer.timeout.connect(self._tick)
@@ -79,13 +83,29 @@ class MainWindow(QMainWindow):
             btn = QPushButton(f"{i + 1}.  {label}")
             btn.setStyleSheet(HOME_BUTTON_STYLE)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda _=False, k=key, l=label: open_module(self, k, l))
+            btn.clicked.connect(lambda _=False, k=key, l=label: (open_module(self, k, l), self.refresh_dashboard()))
             grid.addWidget(btn, i // 4, i % 4)
         grid_wrap = QHBoxLayout()
         grid_wrap.addStretch()
         grid_wrap.addLayout(grid)
         grid_wrap.addStretch()
         root.addLayout(grid_wrap)
+        root.addSpacing(22)
+
+        # ---- today at a glance ----
+        cards = QHBoxLayout()
+        cards.addStretch()
+        self.cards = {}
+        for key, title in (("today_sales", "Today's Sale"), ("cash", "Cash in Hand"),
+                           ("receivable", "Customers Owe You"), ("low_stock", "Low-stock Items"),
+                           ("phones_in_stock", "Phones in Stock")):
+            box = QLabel(alignment=Qt.AlignCenter)
+            box.setMinimumWidth(170)
+            box.setStyleSheet("background: white; border: 1px solid #c9d6e8; border-radius: 10px; padding: 8px;")
+            cards.addWidget(box)
+            self.cards[key] = (box, title)
+        cards.addStretch()
+        root.addLayout(cards)
         root.addStretch(2)
 
         # fixed developer line: a plain label, so it can be neither edited nor deleted from the program
@@ -94,6 +114,20 @@ class MainWindow(QMainWindow):
         dev.setStyleSheet(f"color: {MUTED}; font-size: 13px;")
         dev.setFocusPolicy(Qt.NoFocus)
         root.addWidget(dev)
+
+    def refresh_dashboard(self):
+        try:
+            d = R.dashboard(self.db)
+        except Exception:
+            return                                   # never let a card problem stop the program
+        vals = {"today_sales": f"{d['today_sales']:,.0f}  ({d['today_invoices']} bills)", "cash": f"{d['cash']:,.0f}",
+                "receivable": f"{d['receivable']:,.0f}", "low_stock": str(d["low_stock"]),
+                "phones_in_stock": str(d["phones_in_stock"])}
+        for key, (box, title) in self.cards.items():
+            red = key == "low_stock" and d["low_stock"] > 0
+            box.setText(f"<span style='color:#6b7280;font-size:12px'>{title}</span><br>"
+                        f"<span style='font-size:18px;font-weight:700;color:{'#c0392b' if red else '#1b6ef3'}'>"
+                        f"{vals[key]}</span>")
 
     def refresh_header(self):
         """Reload company name (CAPITAL LETTERS) and logo, e.g. after Company Information Edit."""

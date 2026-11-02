@@ -49,6 +49,8 @@ MENUS = [
         ("All Customer Balance", "all_balances"),
         ("Invoice Print", "invoice_print"),
         ("Products", "products_report"),
+        ("IMEI Search / History", "imei_search"),
+        ("Daily Closing", "daily_closing"),
     ]),
     ("Utilities", [
         ("Backup", "backup"),
@@ -69,7 +71,7 @@ IMPLEMENTED = {"company_edit", "about", "change_password", "customers", "supplie
                "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return",
                "customer_transactions", "cash_received_report", "profit_loss", "invoice_wise", "stock_position",
                "product_ledger", "all_balances", "products_report", "outstanding", "sale_summary", "invoice_print",
-               "backup", "restore", "categories", "reset_db", "printer_settings"}
+               "backup", "restore", "categories", "reset_db", "printer_settings", "imei_search", "daily_closing"}
 
 
 def all_keys():

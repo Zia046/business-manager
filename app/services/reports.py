@@ -154,3 +154,59 @@ def voucher_detail(db, voucher_no):
         return None
     return {"voucher": v, "party": db.one("SELECT * FROM parties WHERE id=?", (v["party_id"],)),
             "company": db.one("SELECT * FROM company WHERE id=1")}
+
+
+# ---------------- phone-shop helpers ----------------
+def imei_lookup(db, text, limit=200):
+    """Find a phone by (part of) IMEI 1 or IMEI 2: where it was bought from and who it was sold to."""
+    text = (text or "").strip()
+    if len(text) < 3:
+        return []
+    like = f"%{text}%"
+    return db.query(
+        "SELECT s.id, s.serial, s.imei2, s.status, p.name AS product, pu.no AS purchase_no, pu.date AS purchase_date, "
+        "sup.name AS supplier, i.no AS invoice_no, i.date AS invoice_date, cu.name AS customer, cu.phone AS cphone, "
+        "(SELECT ii.price - ii.discount FROM invoice_items ii WHERE ii.invoice_id=s.invoice_id "
+        "AND ii.serial=s.serial LIMIT 1) AS sold_price "
+        "FROM serials s JOIN products p ON p.id=s.product_id "
+        "LEFT JOIN purchases pu ON pu.id=s.purchase_id LEFT JOIN parties sup ON sup.id=pu.party_id "
+        "LEFT JOIN invoices i ON i.id=s.invoice_id LEFT JOIN parties cu ON cu.id=i.party_id "
+        "WHERE s.serial LIKE ? OR s.imei2 LIKE ? ORDER BY s.id DESC LIMIT ?", (like, like, limit))
+
+
+def daily_closing(db, date_from, date_to):
+    """One row per day: invoices, sales, money in, money out, expenses and net cash."""
+    a, b = date_from + _START, date_to + _END
+    days = {}
+
+    def day(d):
+        return days.setdefault(d[:10], {"invoices": 0, "sales": 0.0, "cash_in": 0.0, "cash_out": 0.0,
+                                        "expenses": 0.0})
+    for r in db.query("SELECT substr(date,1,10) d, COUNT(*) n, SUM(total) t FROM invoices "
+                      "WHERE status='active' AND date BETWEEN ? AND ? GROUP BY d", (a, b)):
+        x = day(r["d"])
+        x["invoices"], x["sales"] = r["n"], r2(r["t"])
+    for r in db.query("SELECT substr(date,1,10) d, direction, SUM(amount) t FROM cash_book "
+                      "WHERE date BETWEEN ? AND ? GROUP BY d, direction", (a, b)):
+        day(r["d"])["cash_in" if r["direction"] == "in" else "cash_out"] = r2(r["t"])
+    for r in db.query("SELECT substr(date,1,10) d, SUM(amount) t FROM expenses WHERE date BETWEEN ? AND ? GROUP BY d",
+                      (a, b)):
+        day(r["d"])["expenses"] = r2(r["t"])
+    rows = [{"date": d, **v, "net": r2(v["cash_in"] - v["cash_out"])} for d, v in sorted(days.items())]
+    return {"rows": rows, "opening": cash_book(db, date_from, date_to)["opening"],
+            "closing": cash_book(db, date_from, date_to)["closing"]}
+
+
+def dashboard(db, today=None):
+    """Numbers for the home page cards."""
+    from datetime import date as _d
+    today = today or _d.today().isoformat()
+    a, b = today + _START, today + _END
+    sales = db.scalar("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='active' AND date BETWEEN ? AND ?",
+                      (a, b))
+    n = db.scalar("SELECT COUNT(*) FROM invoices WHERE status='active' AND date BETWEEN ? AND ?", (a, b))
+    stock = stock_position(db)["rows"]
+    return {"today_sales": r2(sales), "today_invoices": n, "cash": cash_in_hand(db),
+            "receivable": all_balances(db, "customer")["total"],
+            "low_stock": sum(1 for r in stock if r["low"]),
+            "phones_in_stock": db.scalar("SELECT COUNT(*) FROM serials WHERE status='in_stock'")}

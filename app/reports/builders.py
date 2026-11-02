@@ -269,3 +269,34 @@ def invoice_list_report(db, date_from, date_to):
                             money(r["total"] - r["paid"]), "Cancelled" if r["status"] == "cancelled" else "Active"])
     rep["summary"] = [("Invoices", str(len(rows)))]
     return rep
+
+
+def imei_search_report(db, text=""):
+    rep = _new("IMEI Search / History", "Type at least 3 digits of an IMEI and press Enter",
+               ["IMEI 1", "IMEI 2", "Phone", "Status", "Bought from", "Purchase", "Sold to", "Invoice", "Sold on",
+                "Sold price"], (9,))
+    rows = R.imei_lookup(db, text)
+    for r in rows:
+        rep["rows"].append([r["serial"], r["imei2"] or "", r["product"],
+                            "In stock" if r["status"] == "in_stock" else "SOLD", r["supplier"] or "",
+                            f"{r['purchase_no'] or ''} {(r['purchase_date'] or '')[:10]}".strip(),
+                            (r["customer"] or "") + (f" ({r['cphone']})" if r["cphone"] else ""),
+                            r["invoice_no"] or "", (r["invoice_date"] or "")[:10],
+                            money(r["sold_price"]) if r["sold_price"] is not None else ""])
+    rep["summary"] = [("Found", str(len(rows)))]
+    return rep
+
+
+def daily_closing_report(db, date_from, date_to):
+    c = R.daily_closing(db, date_from, date_to)
+    rep = _new("Daily Closing", f"{date_from}  to  {date_to}",
+               ["Date", "Invoices", "Sales", "Cash In", "Cash Out", "Expenses", "Net Cash"], (1, 2, 3, 4, 5, 6))
+    for r in c["rows"]:
+        rep["rows"].append([r["date"], r["invoices"], money(r["sales"]), money(r["cash_in"]),
+                            money(r["cash_out"]), money(r["expenses"]), money(r["net"])])
+    rep["rows"].append(["Total", sum(r["invoices"] for r in c["rows"]), money(sum(r["sales"] for r in c["rows"])),
+                        money(sum(r["cash_in"] for r in c["rows"])), money(sum(r["cash_out"] for r in c["rows"])),
+                        money(sum(r["expenses"] for r in c["rows"])), money(sum(r["net"] for r in c["rows"]))])
+    rep["bold_rows"].add(len(rep["rows"]) - 1)
+    rep["summary"] = [("Opening cash", money(c["opening"])), ("Closing cash", money(c["closing"]))]
+    return rep

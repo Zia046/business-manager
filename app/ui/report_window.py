@@ -41,7 +41,13 @@ class ReportWindow(QDialog):
             show = QPushButton("Show")
             show.clicked.connect(self.reload)
             top.addWidget(show)
-        if filter_kind:
+        if filter_kind == "imei":
+            top.addWidget(QLabel("IMEI:"))
+            self.filter_combo = QLineEdit(placeholderText="Type IMEI (3+ digits) and press Enter")
+            self.filter_combo.setMinimumWidth(260)
+            self.filter_combo.returnPressed.connect(self.reload)
+            top.addWidget(self.filter_combo)
+        elif filter_kind:
             top.addWidget(QLabel(filter_kind.title() + ":"))
             self.filter_combo = self._make_filter_combo(filter_kind)
             self.filter_combo.currentIndexChanged.connect(lambda *_: self.reload())
@@ -84,6 +90,8 @@ class ReportWindow(QDialog):
         return combo
 
     def _filter_id(self):
+        if self.filter_kind == "imei":
+            return self.filter_combo.text().strip()
         return combo_party_id(self.filter_combo) if self.filter_combo is not None else None
 
     def _range(self):
@@ -98,7 +106,8 @@ class ReportWindow(QDialog):
             args = (self._filter_id(),) if self.filter_kind else ()
             self.report = self.builder(self.db, f, t, *args)
         else:
-            self.report = self.builder(self.db)
+            args = (self._filter_id(),) if self.filter_kind else ()
+            self.report = self.builder(self.db, *args)
         self._render()
 
     def _filtered(self):
