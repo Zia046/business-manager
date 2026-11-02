@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "Business Manager"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.3.0"
 DATA_FOLDER_NAME = "BusinessManagerData"
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_SECONDS = 300

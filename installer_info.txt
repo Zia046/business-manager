@@ -1,0 +1,11 @@
+BUSINESS MANAGER
+Sales, purchase, stock and accounts software for your shop. Works fully offline.
+
+* Your data is stored encrypted in  D:\BusinessManagerData  (or C:\ if there is no D: drive).
+  Installing, updating or uninstalling the program never deletes your data.
+* The first time you start the software it shows a Machine Code. Send it to the software owner to
+  receive your Activation Key.
+
+Developed by Burhan Nexus
+Mobile / WhatsApp: 03475093446
+Email: ziaullah.046@gmail.com

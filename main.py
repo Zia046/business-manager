@@ -4,7 +4,8 @@ import sys
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from app.config import APP_NAME, resolve_data_dir
-from app.services import auth
+from app.services import auth, licensing
+from app.ui.activation import ActivationDialog
 from app.ui.login import LoginDialog
 from app.ui.main_window import MainWindow
 from app.ui.registration import RegistrationDialog
@@ -44,6 +45,16 @@ def run() -> int:
     if used_fallback and not auth.is_registered(data_dir):
         QMessageBox.information(None, APP_NAME,
                                 f"Drive D: was not found. Data will be saved in:\n{data_dir}")
+
+    # The software works only with an Activation Key issued for this computer
+    lic = licensing.status(data_dir)
+    if not lic["valid"]:
+        if ActivationDialog(data_dir, lic["reason"]).exec() != QDialog.Accepted:
+            return 0
+        lic = licensing.status(data_dir)
+    if lic["days_left"] is not None and lic["days_left"] <= licensing.WARN_DAYS:
+        QMessageBox.information(None, APP_NAME, f"Your licence ends in {lic['days_left']} day(s). "
+                                "Contact Burhan Nexus to renew.")
 
     if not auth.is_registered(data_dir):
         reg = RegistrationDialog(data_dir)

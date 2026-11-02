@@ -6,3 +6,7 @@ lock.json
 dist/
 build/
 *.spec
+license_private.key
+*.private.key
+keys_issued.csv
+installer_output/

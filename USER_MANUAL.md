@@ -76,3 +76,11 @@ Window ke upar Minimize/Maximize ke button hain. Minimize kar ke home se dobara 
 
 ### Software ka rabta
 Front page par "Developed by Burhan Nexus, 03475093446, ziaullah.046@gmail.com" hamesha nazar aata hai (badla ya mitaya nahi ja sakta). Har bill/voucher par chhoti line: "To buy this software, contact: 03475093446".
+
+## Installation aur Licence (naya)
+
+**Install:** `BusinessManager-Setup.exe` chalayein. Wizard mein Next dabate jayein; Desktop aur Start Menu shortcut ke options pehle se tick hain. Install ke baad "Start Business Manager now" tick kar ke Finish karein. Software **Settings > Apps** mein se uninstall bhi hota hai (aap ka data D:\BusinessManagerData mehfooz rehta hai).
+
+**Activation:** pehli dafa software "Machine Code" dikhata hai. Ye code Burhan Nexus (03475093446) ko bhejein. Wahan se aap ko Activation Key milegi; usay paste kar ke Activate dabayein. Key sirf usi computer par chalti hai.
+
+**Owner ke liye (key banana):** `KeyGenerator.exe` (GitHub Actions ke artifact `KeyGenerator` mein) aur `license_private.key` ek hi folder mein rakhein. Customer ka Machine Code paste karein, muddat chunein, Generate dabayein, aur Key customer ko bhej dein. `license_private.key` kisi ko na dein aur 2 jagah backup rakhein; ye kho gayi to nayi keys nahi ban sakengi.

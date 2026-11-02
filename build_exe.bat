@@ -11,8 +11,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
-pyinstaller --noconfirm --clean --onefile --windowed ^
+pyinstaller --noconfirm --clean --onedir --windowed ^
   --name BusinessManager ^
+  --icon assets\app.ico ^
   --hidden-import rapidfuzz ^
   --hidden-import arabic_reshaper ^
   --hidden-import bidi ^
@@ -25,6 +26,6 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Done. Your program is:  dist\BusinessManager.exe
-echo Optional installer: open installer.iss with Inno Setup and press Compile.
+echo Done. Your program is:  dist\BusinessManager\BusinessManager.exe
+echo Installer: open installer.iss with Inno Setup and press Compile (creates installer_output\BusinessManager-Setup.exe).
 pause

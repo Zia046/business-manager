@@ -833,3 +833,80 @@ def test_cash_recovery_and_new_screens_compile():
     import py_compile
     for f in ("cash_recovery", "sale_invoice", "modules", "main_window", "stock_purchase"):
         py_compile.compile(f"app/ui/{f}.py", doraise=True)
+
+
+# ---------- licence ----------
+def _issue(machine_raw, expiry=None, private=None):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization as s
+    from app.services import licensing
+    private = private or Ed25519PrivateKey.generate()
+    pub = private.public_key().public_bytes(s.Encoding.Raw, s.PublicFormat.Raw).hex()
+    return licensing.encode_key(licensing.machine_code(machine_raw), expiry, private.sign), pub, private
+
+
+def test_licence_key_works_only_on_its_computer(tmp_path):
+    from app.services import licensing
+    key, pub, _ = _issue("PC-A-GUID")
+    assert licensing.read_key(key, "PC-A-GUID", pub)[0] is True
+    ok, _, msg = licensing.read_key(key, "PC-B-GUID", pub)
+    assert not ok and "different computer" in msg
+    assert not licensing.read_key("AAAA-BBBB", "PC-A-GUID", pub)[0]
+    assert not licensing.read_key(key.replace(key[5], "A" if key[5] != "A" else "B"), "PC-A-GUID", pub)[0]
+    other_pub = _issue("x")[1]
+    assert not licensing.read_key(key, "PC-A-GUID", other_pub)[0]       # not signed by the owner
+
+
+def test_licence_activate_status_and_expiry(tmp_path):
+    from datetime import date, timedelta
+    from app.services import licensing
+    today = date(2026, 11, 2)
+    assert licensing.status(tmp_path, today)["valid"] is False           # nothing activated yet
+    key, pub, priv = _issue("PC-A", today + timedelta(days=30))
+    assert licensing.activate(tmp_path, "garbage", "PC-A", pub)[0] is False
+    assert licensing.activate(tmp_path, f"  {key}\n", "PC-A", pub, today)[0] is True
+    st = licensing.status(tmp_path, today, "PC-A", pub)
+    assert st["valid"] and st["days_left"] == 30
+    assert licensing.status(tmp_path, today + timedelta(days=31), "PC-A", pub)["valid"] is False
+    # clock moved back after use is refused
+    licensing.status(tmp_path, today + timedelta(days=20), "PC-A", pub)
+    assert licensing.status(tmp_path, today, "PC-A", pub)["valid"] is False
+    # copying the licence file to another computer does not work
+    assert licensing.status(tmp_path, today + timedelta(days=20), "PC-B", pub)["valid"] is False
+
+
+def test_licence_for_life_and_embedded_public_key(tmp_path):
+    from datetime import date
+    from app.services import licensing
+    key, pub, _ = _issue("PC-A", None)
+    licensing.activate(tmp_path, key, "PC-A", pub)
+    st = licensing.status(tmp_path, date(2040, 1, 1), "PC-A", pub)
+    assert st["valid"] and st["days_left"] is None
+    assert len(licensing.PUBLIC_KEY_HEX) == 64 and licensing.machine_code().count("-") == 3
+
+
+def test_keygen_tool_makes_a_key_the_app_accepts():
+    import importlib.util
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization as s
+    from app.services import licensing
+    try:
+        spec = importlib.util.spec_from_file_location("keygen_gui", "tools/keygen_gui.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    except ModuleNotFoundError:
+        import pytest
+        pytest.skip("tkinter not installed here")
+    priv = Ed25519PrivateKey.generate()
+    pub = priv.public_key().public_bytes(s.Encoding.Raw, s.PublicFormat.Raw).hex()
+    key = mod.make_key(priv, licensing.machine_code("PC-Z"), None)
+    assert licensing.read_key(key, "PC-Z", pub)[0]
+
+
+def test_installer_and_workflow_files_are_wired():
+    iss = open("installer.iss", encoding="utf-8").read()
+    for needle in ("desktopicon", "autoprograms", "uninstallexe", "assets\\app.ico", "InfoBeforeFile"):
+        assert needle in iss
+    wf = open(".github/workflows/build.yml", encoding="utf-8").read()
+    assert "ISCC.exe" in wf and "KeyGenerator" in wf and "--onedir" in wf
+    assert "license_private" not in wf
