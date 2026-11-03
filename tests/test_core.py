@@ -1325,3 +1325,95 @@ def test_new_screens_compile_and_staff_can_use_them():
         assert permissions.can_open("staff", key)
     for key in ("profit_loss", "reset_db", "users", "audit_log", "backup"):
         assert not permissions.can_open("staff", key)
+
+
+# ---------- dashboard graphs ----------
+def test_dashboard_buckets_and_series(shop):
+    from datetime import date
+    db, sup, cust, prod = _stocked(shop)
+    b = reports._buckets("daily", date(2026, 11, 3))
+    assert len(b) == 14 and b[-1][:2] == (date(2026, 11, 3), date(2026, 11, 3)) and b[0][0] == date(2026, 10, 21)
+    w = reports._buckets("weekly", date(2026, 11, 3))                     # Tuesday
+    assert len(w) == 12 and w[-1][0] == date(2026, 11, 2) and w[-1][1] == date(2026, 11, 8)
+    m = reports._buckets("monthly", date(2026, 2, 10))
+    assert len(m) == 12 and m[-1][:2] == (date(2026, 2, 1), date(2026, 2, 28)) and m[0][0] == date(2025, 3, 1)
+    assert m[0][2] == "Mar 25"
+    y = reports._buckets("yearly", date(2026, 5, 5))
+    assert [x[2] for x in y] == ["2022", "2023", "2024", "2025", "2026"]
+    with pytest.raises(ValueError):
+        reports._buckets("hourly", date(2026, 1, 1))
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 60000}], paid=60000)
+    for period in ("daily", "weekly", "monthly", "yearly"):
+        s = reports.dashboard_series(db, period)
+        assert len(s["labels"]) == len(s["sales"]) == len(s["profit"])
+        assert s["sales"][-1] == 60000 and s["total_sales"] == 60000
+        assert s["profit"][-1] > 0 and s["total_profit"] == s["profit"][-1]
+
+
+def test_dashboard_lists(shop):
+    db, sup, cust, prod = _stocked(shop)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 40000}])
+    d = reports.dashboard_lists(db)
+    assert d["recent"][0]["customer"] == "Ali" and d["debtors"][0]["balance"] == 40000
+    assert isinstance(d["low_stock"], list) and d["due_dates"] == []
+
+
+# ---------- dashboard graphs ----------
+def test_sales_series_buckets(shop):
+    from datetime import date
+    db, sup, cust, prod = _stocked(shop)
+    today = date(2026, 11, 3)                                   # a Tuesday
+    item = lambda p: [{"product_id": prod, "qty": 1, "price": p}]
+    trading.create_invoice(db, cust, item(1000), date="2026-11-03 10:00:00")
+    trading.create_invoice(db, cust, item(2000), date="2026-11-02 10:00:00")     # Monday, same week
+    trading.create_invoice(db, cust, item(4000), date="2026-10-20 10:00:00")
+    trading.create_invoice(db, cust, item(8000), date="2025-03-05 10:00:00")
+    day = reports.sales_series(db, "day", today)
+    assert len(day) == 14 and day[-1] == ("3/11", 1000) and day[-2] == ("2/11", 2000)
+    week = reports.sales_series(db, "week", today)
+    assert len(week) == 8 and week[-1] == ("2/11", 3000)                          # Mon 2 Nov week
+    month = reports.sales_series(db, "month", today)
+    assert len(month) == 12 and month[-1] == ("Nov 26", 3000) and month[-2] == ("Oct 26", 4000)
+    year = reports.sales_series(db, "year", today)
+    assert [y[0] for y in year] == ["2022", "2023", "2024", "2025", "2026"]
+    assert year[-1][1] == 7000 and year[-2][1] == 8000
+    inv = trading.create_invoice(db, cust, item(500), date="2026-11-03 11:00:00")
+    trading.cancel_invoice(db, inv)
+    assert reports.sales_series(db, "day", today)[-1][1] == 1000                  # cancelled bills are not counted
+
+
+def test_profit_series_and_extras(shop):
+    from datetime import date
+    db, sup, cust, prod = _stocked(shop)
+    today = date(2026, 11, 3)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 60000}], date="2026-11-01 09:00:00")
+    payments.add_expense(db, "Rent", 5000, "", "2026-11-02 09:00:00")
+    ps = reports.profit_series(db, today)
+    assert len(ps) == 12 and ps[-1][0] == "Nov 26" and ps[-1][1] < 60000          # sale minus cost minus expense
+    assert ps[0][1] == 0
+    ex = reports.dashboard_extras(db, today)
+    assert ex["month_sales"] == 60000 and ex["top_products"][0]["qty"] == 1
+    assert ex["month_profit"] == ps[-1][1] and ex["year_profit"] == ps[-1][1]
+    assert ex["open_repairs"] == 0 and isinstance(ex["low_items"], list)
+
+
+def test_charts_render_pictures():
+    from app.reports import charts
+    img = charts.bar_chart([("a", 100), ("b", 0), ("c", 2500000)], "Sales", size=(400, 200))
+    assert img.size == (400, 200) and len(img.getcolors(1000000)) > 5
+    loss = charts.bar_chart([("a", -50), ("b", 80)], "P/L", size=(400, 200), signed=True)
+    assert loss.getpixel((100, 100)) is not None
+    assert charts.bar_chart([], "Empty", size=(300, 150)).size == (300, 150)      # no data: still a picture
+    assert charts.clock_image(3, 15, 45, 120).size == (120, 120)
+    assert charts.to_png(img).startswith(b"\x89PNG")
+    assert [charts.short(v) for v in (800, 45500, 1250000, -12000)] == ["800", "45.5k", "1.25M", "-12k"]
+
+
+def test_dashboard_and_main_window_modules_load():
+    for name in ("app.ui.dashboard", "app.ui.main_window"):
+        assert _import_with_qt_stub(name) is not None
+    src = open("app/ui/main_window.py", encoding="utf-8").read()
+    # the developer line is a plain, non-interactive label shown under every page
+    assert "Developed by" in src and "NoTextInteraction" in src and "_build_footer" in src
+    dash = open("app/ui/dashboard.py", encoding="utf-8").read()
+    assert "Home Screen" in dash and "Profit / Loss per month" in dash and "QCalendarWidget" in dash

@@ -117,3 +117,9 @@ Agar seedha print na ho sake to bill PDF mein khul jata hai, bill zaya nahi hota
 **Staff accounts / Audit Log / Excel import / Warranty:** Utilities > Staff Accounts (owner), Utilities > Audit Log (kisne kya badla), New Account > Import from Excel, aur product mein "Warranty" (bill par chhapti hai, IMEI Search mein bhi dikhti hai).
 
 **Backup:** ab software chalte huye bhi har 2 ghante baad (agar data badla ho) khud backup banata hai, aur band hone par bhi. Utilities > Backup mein **Check Latest Backup** se jaanch, aur **USB drives found** se USB chun kar har backup ki copy USB mein bhi. Home par "Last Backup" card 2 din se purana ho to surkh ho jata hai.
+
+## Dashboard (naya)
+Menu bar mein sab se pehle **Dashboard** (aur **Home**) ka button hai; F5 dabane se bhi Dashboard khulta hai. Home par bhi upar "Dashboard" button hai. Agar 90 second tak koi kaam na ho (mouse/keyboard) to software khud Dashboard khula chhor deta hai (koi window khuli ho to nahi chhedta).
+
+Dashboard mein: upar logo aur dukan ki maloomat; aaj/mahine ki sale, phones, low stock, qist, repairs, cash aur baqayajat ke cards; **Daily, Weekly, Monthly, Yearly sale ke graph**; neeche **Profit / Loss graph** (hara = munafa, surkh = nuqsan); sab se ziada bikne wali cheezein, kam stock aur qist due ki list; dayein taraf ghari aur calendar. Sab se neeche "Developed by Burhan Nexus, mobile aur email" hamesha nazar aata hai (sirf label hai, badla ya mitaya nahi ja sakta).
+Staff ko cash, baqayajat, munafa aur profit graph nazar nahi aate.

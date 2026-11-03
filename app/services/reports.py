@@ -217,3 +217,156 @@ def dashboard(db, today=None):
             "qist_overdue": db.scalar(
                 "SELECT COUNT(*) FROM installments ins JOIN installment_plans p ON p.id=ins.plan_id "
                 "WHERE p.status='active' AND ins.amount-ins.paid>0.004 AND ins.due_date < ?", (today,))}
+
+
+# ---------------- dashboard graphs and lists ----------------
+def _buckets(period, today):
+    """[(from_date, to_date, label)] oldest first, ending with the period that contains `today`."""
+    import calendar
+    from datetime import timedelta
+    if period == "daily":                                   # last 14 days
+        days = [today - timedelta(days=i) for i in range(13, -1, -1)]
+        return [(d, d, d.strftime("%d %b")) for d in days]
+    if period == "weekly":                                  # last 12 weeks (Monday to Sunday)
+        start = today - timedelta(days=today.weekday())
+        weeks = [start - timedelta(days=7 * k) for k in range(11, -1, -1)]
+        return [(s, s + timedelta(days=6), s.strftime("%d %b")) for s in weeks]
+    if period == "monthly":                                 # last 12 months
+        out = []
+        for k in range(11, -1, -1):
+            m0 = today.year * 12 + today.month - 1 - k
+            y, m = m0 // 12, m0 % 12 + 1
+            out.append((today.replace(year=y, month=m, day=1),
+                        today.replace(year=y, month=m, day=calendar.monthrange(y, m)[1]),
+                        today.replace(year=y, month=m, day=1).strftime("%b %y")))
+        return out
+    if period == "yearly":                                  # last 5 years
+        return [(today.replace(year=y, month=1, day=1), today.replace(year=y, month=12, day=31), str(y))
+                for y in range(today.year - 4, today.year + 1)]
+    raise ValueError("period must be daily, weekly, monthly or yearly")
+
+
+def dashboard_series(db, period="daily", today=None):
+    """Sales (after returns) and net profit/loss for each bucket of the period, for the home-page graphs."""
+    from datetime import date as _d
+    today = today or _d.today()
+    labels, sales, profit = [], [], []
+    for a, b, label in _buckets(period, today):
+        p = profit_loss(db, a.isoformat(), b.isoformat())
+        labels.append(label)
+        sales.append(p["net_sales"])
+        profit.append(p["net_profit"])
+    return {"labels": labels, "sales": sales, "profit": profit,
+            "total_sales": r2(sum(sales)), "total_profit": r2(sum(profit))}
+
+
+def dashboard_lists(db):
+    recent = db.query("SELECT i.no, i.date, i.total, p.name AS customer FROM invoices i "
+                      "JOIN parties p ON p.id=i.party_id WHERE i.status='active' ORDER BY i.id DESC LIMIT 6")
+    low = sorted((r for r in stock_position(db)["rows"] if r["low"]), key=lambda r: r["qty"])[:6]
+    debtors = sorted(all_balances(db, "customer")["rows"], key=lambda r: -r["balance"])[:5]
+    due = db.query("SELECT DISTINCT ins.due_date FROM installments ins JOIN installment_plans p ON p.id=ins.plan_id "
+                   "WHERE p.status='active' AND ins.amount-ins.paid>0.004 ORDER BY ins.due_date LIMIT 400")
+    return {"recent": recent, "low_stock": low, "debtors": debtors, "due_dates": [r["due_date"] for r in due]}
+
+
+# ---------------- dashboard graphs ----------------
+def _bucket_start(d, kind):
+    from datetime import timedelta
+    if kind == "week":
+        return d - timedelta(days=d.weekday())          # weeks start on Monday
+    if kind == "month":
+        return d.replace(day=1)
+    if kind == "year":
+        return d.replace(month=1, day=1)
+    return d
+
+
+def _next_bucket(d, kind):
+    from datetime import timedelta
+    if kind == "day":
+        return d + timedelta(days=1)
+    if kind == "week":
+        return d + timedelta(days=7)
+    if kind == "month":
+        return d.replace(year=d.year + (d.month == 12), month=d.month % 12 + 1)
+    return d.replace(year=d.year + 1)
+
+
+def _prev_bucket(d, kind):
+    from datetime import timedelta
+    if kind == "day":
+        return d - timedelta(days=1)
+    if kind == "week":
+        return d - timedelta(days=7)
+    if kind == "month":
+        return (d - timedelta(days=1)).replace(day=1)
+    return d.replace(year=d.year - 1)
+
+
+_LAST = {"day": 14, "week": 8, "month": 12, "year": 5}
+
+
+def _label(d, kind):
+    return {"day": f"{d.day}/{d.month}", "week": f"{d.day}/{d.month}", "month": d.strftime("%b %y"),
+            "year": str(d.year)}[kind]
+
+
+def bucket_starts(kind, today=None, count=None):
+    from datetime import date
+    today = today or date.today()
+    cur, out = _bucket_start(today, kind), []
+    for _ in range(count or _LAST[kind]):
+        out.append(cur)
+        cur = _prev_bucket(cur, kind)
+    return out[::-1]
+
+
+def sales_series(db, kind="day", today=None):
+    """[(label, sales)] for the last 14 days / 8 weeks / 12 months / 5 years (empty periods are 0)."""
+    from datetime import date
+    today = today or date.today()
+    starts = bucket_starts(kind, today)
+    rows = db.query("SELECT date, total FROM invoices WHERE status='active' AND date >= ?",
+                    (starts[0].isoformat() + _START,))
+    totals = {s: 0.0 for s in starts}
+    for r in rows:
+        s = _bucket_start(date.fromisoformat(r["date"][:10]), kind)
+        if s in totals:
+            totals[s] += r["total"]
+    return [(_label(s, kind), r2(totals[s])) for s in starts]
+
+
+def profit_series(db, today=None, months=12):
+    """[(label, net profit or loss)] per month for the last `months` months."""
+    from datetime import date
+    today = today or date.today()
+    out = []
+    for s in bucket_starts("month", today, months):
+        end = _next_bucket(s, "month")
+        last = date.fromordinal(end.toordinal() - 1)
+        out.append((_label(s, "month"), profit_loss(db, s.isoformat(), last.isoformat())["net_profit"]))
+    return out
+
+
+def dashboard_extras(db, today=None):
+    """More numbers for the dashboard: this month/year, top products, low stock, qist due, open repairs."""
+    from datetime import date
+    today = today or date.today()
+    m0, y0 = today.replace(day=1), today.replace(month=1, day=1)
+    iso = today.isoformat()
+    month_sales = db.scalar("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='active' AND date >= ?",
+                            (m0.isoformat() + _START,))
+    month = profit_loss(db, m0.isoformat(), iso)["net_profit"]
+    year = profit_loss(db, y0.isoformat(), iso)["net_profit"]
+    top = db.query("SELECT p.name, SUM(ii.qty) AS qty, SUM(ii.qty*ii.price-ii.discount) AS amount "
+                   "FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN products p ON p.id=ii.product_id "
+                   "WHERE i.status='active' AND i.date >= ? GROUP BY p.id ORDER BY amount DESC LIMIT 5",
+                   (m0.isoformat() + _START,))
+    low = [r for r in stock_position(db)["rows"] if r["low"]][:8]
+    from .installments import due_list
+    qist = [r for r in due_list(db, iso) if r["days_late"] >= -3][:6]
+    return {"month_sales": r2(month_sales), "month_profit": month, "year_profit": year, "top_products": top,
+            "low_items": low, "qist_due": qist,
+            "open_repairs": db.scalar("SELECT COUNT(*) FROM repairs WHERE status IN "
+                                      "('received','in_progress','ready')")}
