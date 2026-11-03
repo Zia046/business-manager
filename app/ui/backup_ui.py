@@ -1,7 +1,7 @@
 """Utilities > Backup and Restore Backup screens."""
 from pathlib import Path
 
-from PySide6.QtWidgets import (QApplication, QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
                                QMessageBox, QPushButton, QVBoxLayout)
 
 from ..services import backup
@@ -27,12 +27,17 @@ class BackupDialog(QDialog):
         other = QPushButton("Backup to USB / Other Folder...")
         other.setObjectName("secondary")
         other.clicked.connect(self.backup_elsewhere)
+        verify = QPushButton("Check Latest Backup")
+        verify.setObjectName("secondary")
+        verify.clicked.connect(self.verify)
         row.addWidget(now)
         row.addWidget(other)
+        row.addWidget(verify)
         row.addStretch()
         lay.addLayout(row)
 
-        self.auto = QCheckBox("Automatic backup every time the program is closed (keeps the last 30)")
+        self.auto = QCheckBox("Automatic backup while working (every 2 hours when data changed) and when the "
+                              "program is closed (keeps the last 30)")
         self.auto.setChecked(s["auto_backup"])
         self.auto.toggled.connect(self.save_settings)
         lay.addWidget(self.auto)
@@ -46,6 +51,19 @@ class BackupDialog(QDialog):
         erow.addWidget(self.extra, 1)
         erow.addWidget(pick)
         lay.addLayout(erow)
+        self.usb_row = QHBoxLayout()
+        self.usb = QComboBox()
+        use = QPushButton("Use this USB drive")
+        use.setObjectName("secondary")
+        use.clicked.connect(self.use_usb)
+        refresh = QPushButton("Find USB drives")
+        refresh.setObjectName("secondary")
+        refresh.clicked.connect(self.find_usb)
+        for w in (QLabel("USB drives found:"), self.usb, use, refresh):
+            self.usb_row.addWidget(w)
+        self.usb_row.addStretch()
+        lay.addLayout(self.usb_row)
+        self.find_usb()
 
         lay.addWidget(QLabel("Existing backups:"))
         self.table = make_table(["File", "Date", "Size (KB)"], stretch_col=0)
@@ -67,6 +85,26 @@ class BackupDialog(QDialog):
     def save_settings(self, *_):
         backup.save_settings(self.db.data_dir, auto_backup=self.auto.isChecked(),
                              extra_folder=self.extra.text().strip())
+
+    def find_usb(self):
+        self.usb.clear()
+        for d in backup.removable_drives():
+            self.usb.addItem(d, d)
+        if not self.usb.count():
+            self.usb.addItem("(none found - plug in the USB and press Find)", "")
+
+    def use_usb(self):
+        d = self.usb.currentData()
+        if d:
+            self.extra.setText(d + "BusinessManagerBackups")
+            self.save_settings()
+            self.msg.setText(f"Every automatic backup is now also copied to {self.extra.text()}")
+
+    def verify(self):
+        try:
+            self.msg.setText(backup.verify_latest(self.db.data_dir))
+        except BusinessError as exc:
+            QMessageBox.warning(self, "Backup check", str(exc))
 
     def choose_extra(self):
         d = QFileDialog.getExistingDirectory(self, "Choose folder (e.g. USB drive)")

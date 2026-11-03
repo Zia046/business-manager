@@ -73,21 +73,89 @@ def create_backup(db, dest_dir=None, prefix="backup") -> Path:
     return out
 
 
+def _auto_backup(db):
+    s = get_settings(db.data_dir)
+    out = create_backup(db, prefix="auto")
+    autos = sorted(backups_dir(db.data_dir).glob(f"auto_*{EXT}"))
+    for old in autos[:-KEEP_AUTO_BACKUPS]:
+        old.unlink(missing_ok=True)
+    if s["extra_folder"] and Path(s["extra_folder"]).exists():       # USB / second folder
+        shutil.copyfile(out, Path(s["extra_folder"]) / out.name)
+    return out
+
+
 def auto_backup_on_exit(db):
     """Called when the program closes. Never raises: a failed backup must not block closing."""
     try:
-        s = get_settings(db.data_dir)
-        if not s["auto_backup"]:
+        if not get_settings(db.data_dir)["auto_backup"]:
             return None
-        out = create_backup(db, prefix="auto")
-        autos = sorted(backups_dir(db.data_dir).glob(f"auto_*{EXT}"))
-        for old in autos[:-KEEP_AUTO_BACKUPS]:
-            old.unlink(missing_ok=True)
-        if s["extra_folder"] and Path(s["extra_folder"]).exists():
-            shutil.copyfile(out, Path(s["extra_folder"]) / out.name)
-        return out
+        return _auto_backup(db)
     except Exception:
         return None
+
+
+def periodic_backup(db, every_minutes=120, now_ts=None):
+    """Called from a timer while the program is open: makes an automatic backup when the last one is older
+    than `every_minutes` AND something changed since. Never raises. Returns the new file or None."""
+    import time
+    try:
+        if not get_settings(db.data_dir)["auto_backup"]:
+            return None
+        last = last_backup_info(db.data_dir)
+        now_ts = now_ts or time.time()
+        if last["time"] and (now_ts - last["time"].timestamp()) < every_minutes * 60:
+            return None
+        db_file = Path(db.data_dir) / DB_FILE
+        if last["time"] and db_file.exists() and db_file.stat().st_mtime <= last["time"].timestamp():
+            return None                                                  # nothing changed since that backup
+        return _auto_backup(db)
+    except Exception:
+        return None
+
+
+def last_backup_info(data_dir) -> dict:
+    """{'time': datetime or None, 'age_hours': float or None, 'name': str}"""
+    files = sorted(backups_dir(data_dir).glob(f"*{EXT}"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not files:
+        return {"time": None, "age_hours": None, "name": ""}
+    t = datetime.fromtimestamp(files[0].stat().st_mtime)
+    return {"time": t, "age_hours": (datetime.now() - t).total_seconds() / 3600, "name": files[0].name}
+
+
+def verify_backup(path) -> str:
+    """Checks that a backup file is complete and not damaged. Returns a short report; raises BusinessError."""
+    validate_backup(path)
+    with zipfile.ZipFile(path) as z:
+        sizes = {i.filename: i.file_size for i in z.infolist()}
+    if sizes.get(DB_FILE, 0) < 100:
+        raise BusinessError("The database inside this backup is empty.")
+    return f"OK - {Path(path).name} is complete ({sum(sizes.values()) // 1024} KB of data)."
+
+
+def verify_latest(data_dir) -> str:
+    info = last_backup_info(data_dir)
+    if not info["name"]:
+        raise BusinessError("There is no backup yet. Press Backup Now first.")
+    return verify_backup(backups_dir(data_dir) / info["name"])
+
+
+def removable_drives() -> list[str]:
+    """USB / removable drive letters on Windows (empty list elsewhere)."""
+    import os
+    if os.name != "nt":
+        return []
+    try:
+        import ctypes
+        mask = ctypes.windll.kernel32.GetLogicalDrives()
+        out = []
+        for i in range(26):
+            if mask & (1 << i):
+                root = f"{chr(65 + i)}:\\"
+                if ctypes.windll.kernel32.GetDriveTypeW(root) == 2:      # DRIVE_REMOVABLE
+                    out.append(root)
+        return out
+    except Exception:
+        return []
 
 
 def list_backups(data_dir):

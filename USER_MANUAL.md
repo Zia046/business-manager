@@ -97,3 +97,23 @@ Agar seedha print na ho sake to bill PDF mein khul jata hai, bill zaya nahi hota
 - **Reports > IMEI Search / History:** IMEI ke 3+ digits likh kar Enter dabayein. Phone kis se kharida, kab bika, kis customer ko, kis rate par, sab nazar aata hai (warranty ya complaint ke liye).
 - **Reports > Daily Closing:** har din ke bills, sale, cash in/out, kharche aur net cash. Ek din ke liye From aur To mein wohi tarikh rakhein.
 - **Home page cards:** aaj ki sale, cash in hand, customers ke baqayajat, low-stock items aur stock mein phones. Ye har 20 second mein khud update hote hain.
+
+## Qist, Repair, Labels, WhatsApp, Backup (naya)
+
+**Installments (Qist)** - Sale/Purchase menu:
+- *New Plan:* customer chunein, raqam (poora baqaya ya kisi bill ka credit), kitni qist aur pehli tarikh likhein. Neeche schedule dikhta hai.
+- Customer jab bhi **Cash Recovery** mein paisay deta hai to wo khud sab se purani qist mein jama ho jate hain. Alag se kuch karna nahi.
+- *View Schedule* se har qist ka haal (Paid / LATE / Pending). Qist late ho to surkh rang.
+- Reports > **Qist Due List** mein sab ki baqi qistein, kitni late. Home par "Qist Overdue" card bhi hai.
+
+**Repair Jobs** - Sale/Purchase menu: phone repair ke liye job banayein (naam, phone, model, kharabi, andaza, advance), **Print Slip** se parchi. Status: Received, In repair, Ready. **Deliver** par final charges, parts ki qeemat aur wasool hone wali raqam likhein. Advance aur payment cash book mein jate hain; delivered jobs ka munafa Profit Loss Report mein "Repair income" ke taur par aata hai. Job cancel karne par advance wapas ho jata hai.
+
+**Barcode / Price Labels** - Reports menu: products chunein, har ke labels ki tadad likhein, A4 sticker sheet ya label printer roll (50x30 mm) chunein. Product mein "Barcode" bhar sakte hain, warna 6 digit ID barcode banta hai. Scanner se barcode scan karne par Sale Invoice mein product khud mil jata hai.
+
+**Price List** - Reports menu: category wise rate list, Print / PDF ya Excel mein.
+
+**WhatsApp Reminder:** Outstanding, Qist Due List, Cash Recovery aur Qist screens mein "WhatsApp Reminder" dabayein: WhatsApp khulta hai aur message pehle se likha hota hai (customer ka phone number save hona chahiye). Bas Send dabana hai. Repair jobs mein "Phone Ready" ka message bhi hai.
+
+**Staff accounts / Audit Log / Excel import / Warranty:** Utilities > Staff Accounts (owner), Utilities > Audit Log (kisne kya badla), New Account > Import from Excel, aur product mein "Warranty" (bill par chhapti hai, IMEI Search mein bhi dikhti hai).
+
+**Backup:** ab software chalte huye bhi har 2 ghante baad (agar data badla ho) khud backup banata hai, aur band hone par bhi. Utilities > Backup mein **Check Latest Backup** se jaanch, aur **USB drives found** se USB chun kar har backup ki copy USB mein bhi. Home par "Last Backup" card 2 din se purana ho to surkh ho jata hai.

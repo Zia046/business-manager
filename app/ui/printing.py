@@ -72,3 +72,21 @@ def print_voucher(db, voucher_no: str) -> Path:
     build_voucher_pdf(db, voucher_no, path)
     deliver(db, path, thermal=False)
     return path
+
+
+def print_repair_slip(db, repair_id: int) -> Path:
+    from ..reports.repair_slip import build_repair_slip
+    width = int(backup.get_settings(db.data_dir).get("thermal_width", 80))
+    no = db.scalar("SELECT no FROM repairs WHERE id=?", (repair_id,), "")
+    path = Path(db.data_dir) / "invoices" / f"{no}.pdf"
+    build_repair_slip(db, repair_id, path, width)
+    deliver(db, path, thermal=True)
+    return path
+
+
+def print_labels(db, items, layout: str) -> Path:
+    from ..reports.labels_pdf import build_labels_pdf
+    path = Path(db.data_dir) / "invoices" / "labels.pdf"
+    build_labels_pdf(db, items, path, layout)
+    deliver(db, path, thermal=(layout == "roll"))
+    return path

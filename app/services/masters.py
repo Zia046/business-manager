@@ -96,16 +96,35 @@ def _months(v) -> int:
     return n
 
 
+def _barcode(db, code, product_id=None) -> str:
+    """Optional product barcode: letters/digits only, and never shared by two products."""
+    code = (code or "").strip()
+    if not code:
+        return ""
+    if not code.isalnum() or len(code) > 40:
+        raise BusinessError("Barcode may contain only letters and digits (up to 40)")
+    other = db.one("SELECT id, name FROM products WHERE barcode=? AND id<>? AND active=1", (code, product_id or 0))
+    if other:
+        raise BusinessError(f"This barcode is already used by '{other['name']}'")
+    return code
+
+
+def barcode_for(product) -> str:
+    """What is printed/scanned for a product: its own barcode, or its ID as 6 digits."""
+    return product.get("barcode") or f"{product['id']:06d}"
+
+
 @audited("Product added", lambda db,a,k,r: f"{a[0] if a else k.get('name')} (id {r})")
 def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0, category="",
                 tags="", unit="pcs", low_stock_level=0.0, track_serial=False, imei_mode="single",
-                warranty_months=0) -> int:
+                warranty_months=0, barcode="") -> int:
     """A category must be chosen. Mobile phones are always IMEI-tracked, must say whether they have a
     single or double IMEI, and cannot have an opening stock (phones enter stock through Stock Purchase,
     where every IMEI number is compulsory)."""
     if not name.strip():
         raise BusinessError("Product name is required")
     warranty_months = _months(warranty_months)
+    barcode = _barcode(db, barcode)
     if min(sale_price, purchase_price, opening_stock) < 0:
         raise BusinessError("Prices and stock cannot be negative")
     cat = get_category(db, category)
@@ -123,15 +142,16 @@ def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0,
     with db.transaction() as c:
         cur = c.execute(
             "INSERT INTO products(name,category,tags,unit,last_purchase_price,avg_cost,sale_price,"
-            "opening_stock,low_stock_level,track_serial,imei_mode,warranty_months) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "opening_stock,low_stock_level,track_serial,imei_mode,warranty_months,barcode) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (name.strip(), cat["name"], tags, unit, purchase_price, purchase_price, sale_price,
-             opening_stock, low_stock_level, int(mobile), imei_mode, warranty_months))
+             opening_stock, low_stock_level, int(mobile), imei_mode, warranty_months, barcode or None))
         return cur.lastrowid
 
 
 @audited("Product edited", lambda db,a,k,r: f"id {a[0]}: " + ", ".join(f"{x}={y}" for x,y in k.items()))
 def update_product(db, product_id, **fields):
-    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode", "warranty_months"}
+    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode", "warranty_months", "barcode"}
     bad = set(fields) - allowed
     if bad:
         raise BusinessError(f"Cannot edit: {', '.join(sorted(bad))}")
@@ -144,6 +164,8 @@ def update_product(db, product_id, **fields):
         raise BusinessError("Product name is required")
     if "warranty_months" in fields:
         fields["warranty_months"] = _months(fields["warranty_months"])
+    if "barcode" in fields:
+        fields["barcode"] = _barcode(db, fields["barcode"], product_id) or None
     has_history = db.scalar("SELECT COUNT(*) FROM stock_moves WHERE product_id=?", (product_id,)) > 0
     if "category" in fields:
         cat = get_category(db, fields["category"])
@@ -194,6 +216,13 @@ def search_products(db, text="", limit=50):
     if not text:
         return sorted(rows, key=lambda r: r["name"].lower())[:limit]
     t = text.lstrip("#").lower()
+    scanned = [r for r in rows if (r.get("barcode") or "").lower() == t]      # a barcode scanner types the code
+    if scanned:
+        return scanned
+    if t.isdigit() and len(t) == 6:                                           # printed label code = ID, 6 digits
+        hit = [r for r in rows if r["id"] == int(t)]
+        if hit:
+            return hit
     if t.isdigit():
         hit = [r for r in rows if r["id"] == int(t)]
         if hit:

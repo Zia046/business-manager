@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [6, 4, 4, 3, 11, 8]
+    assert [len(i) for _, i in MENUS] == [6, 6, 4, 3, 14, 8]
     assert len(HOME_BUTTONS) == 7
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -1131,3 +1131,197 @@ def test_import_products_and_parties_from_excel_and_csv(shop, tmp_path):
         importer.import_products(db, importer.read_rows(wrong))
     with pytest.raises(BusinessError, match="Excel"):
         importer.read_rows(tmp_path / "x.txt")
+
+
+# ---------- qist (installments), repairs, WhatsApp ----------
+def test_qist_plan_schedule_and_allocation(shop):
+    from app.services import installments as I
+    db, sup, cust, prod = _stocked(shop)
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 60000}], paid=0)
+    pid = I.create_plan(db, cust, 60000, 3, "2026-12-01", invoice_id=inv)
+    sched = I.schedule(db, pid)
+    assert [s["amount"] for s in sched] == [20000, 20000, 20000]
+    assert [s["due_date"] for s in sched] == ["2026-12-01", "2027-01-01", "2027-02-01"]
+    with pytest.raises(BusinessError, match="already has"):
+        I.create_plan(db, cust, 1000, 2, "2026-12-01", invoice_id=inv)
+    payments.receive_from_customer(db, cust, 25000)                   # any cash recovery counts automatically
+    sched = I.schedule(db, pid)
+    assert [s["paid"] for s in sched] == [20000, 5000, 0]
+    due = I.due_list(db, today="2027-01-10")
+    assert [(d["seq"], d["remaining"], d["days_late"]) for d in due] == [(2, 15000, 9), (3, 20000, -22)]
+    with pytest.raises(BusinessError, match="already paid"):
+        I.cancel_plan(db, pid)
+    payments.receive_from_customer(db, cust, 35000)
+    assert db.scalar("SELECT status FROM installment_plans WHERE id=?", (pid,)) == "closed"
+    assert customer_balance(db.conn, cust) == 0
+
+
+def test_qist_rules(shop):
+    from app.services import installments as I
+    db, sup, cust, prod = _stocked(shop)
+    with pytest.raises(BusinessError, match="more than this customer owes"):
+        I.create_plan(db, cust, 5000, 2, "2026-12-01")
+    walkin = db.scalar("SELECT id FROM parties WHERE is_walkin=1")
+    with pytest.raises(BusinessError, match="saved customer"):
+        I.create_plan(db, walkin, 100, 2, "2026-12-01")
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 10000}])
+    with pytest.raises(BusinessError, match="between 1 and 60"):
+        I.create_plan(db, cust, 5000, 0, "2026-12-01")
+    pid = I.create_plan(db, cust, 10000, 1, "2026-12-01")
+    I.cancel_plan(db, pid)
+    assert db.scalar("SELECT status FROM installment_plans WHERE id=?", (pid,)) == "cancelled"
+    assert I.due_list(db) == []
+
+
+def test_qist_report_and_dashboard(shop):
+    from app.reports import builders as B
+    from app.services import installments as I
+    db, sup, cust, prod = _stocked(shop)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 30000}])
+    I.create_plan(db, cust, 30000, 3, "2020-01-01")                   # long overdue
+    rep = B.qist_due_report(db)
+    assert rep["rows"][0][0].startswith("QST-") and rep["rows"][0][6].startswith("LATE")
+    assert reports.dashboard(db)["qist_overdue"] == 3
+
+
+def test_repair_job_cash_and_profit(shop):
+    from app.services import repairs
+    db, sup, cust, prod = _stocked(shop)
+    j = repairs.create_job(db, "Bilal", "03001234567", "Samsung A12", "Screen broken", estimate=4000, advance=1000)
+    assert db.scalar("SELECT no FROM repairs WHERE id=?", (j,)) == "RJ-00001"
+    assert reports.cash_in_hand(db) - db.scalar("SELECT opening_cash FROM company WHERE id=1") == 1000
+    repairs.update_job(db, j, status="ready", charges=3500)
+    with pytest.raises(BusinessError, match="more than the charges"):
+        repairs.deliver(db, j, 3500, 1500, 3000)
+    repairs.deliver(db, j, 3500, 1500, 2500)
+    job = repairs.list_jobs(db)[0]
+    assert job["status"] == "delivered" and job["received"] == 3500 and job["due"] == 0
+    p = reports.profit_loss(db, "2000-01-01", "2100-01-01")
+    assert p["repair_income"] == 3500 and p["repair_cost"] == 1500 and p["gross_profit"] == 2000
+    with pytest.raises(BusinessError, match="cannot be changed"):
+        repairs.update_job(db, j, status="received")
+
+
+def test_repair_cancel_returns_advance_and_partial_payment(shop):
+    from app.services import repairs
+    db, sup, cust, prod = _stocked(shop)
+    base = reports.cash_in_hand(db)
+    a = repairs.create_job(db, "Ali", "", "Nokia", "No power", advance=500)
+    repairs.cancel_job(db, a)
+    assert reports.cash_in_hand(db) == base and repairs.list_jobs(db)[0]["status"] == "cancelled"
+    b = repairs.create_job(db, "Sana", "", "Vivo", "Charging port", advance=0)
+    repairs.deliver(db, b, 2000, 500, 500)                              # leaves 1500 due
+    assert [x for x in repairs.list_jobs(db, "delivered")][0]["due"] == 1500
+    repairs.receive_payment(db, b, 1500)
+    assert repairs.list_jobs(db, "delivered")[0]["due"] == 0
+    with pytest.raises(BusinessError, match="more than the amount"):
+        repairs.receive_payment(db, b, 1)
+    assert len(repairs.list_jobs(db, text="vivo")) == 1 and repairs.list_jobs(db, "open") == []
+
+
+def test_whatsapp_numbers_and_messages(shop):
+    from app.services import reminders
+    db, sup, cust, prod = _stocked(shop)
+    assert reminders.normalize_phone("0347-5093446") == "923475093446"
+    assert reminders.normalize_phone("+92 347 5093446") == "923475093446"
+    assert reminders.normalize_phone("3475093446") == "923475093446"
+    assert reminders.normalize_phone("") == ""
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 7000}])
+    phone, text = reminders.balance_message(db, cust)
+    assert "7,000" in text and "Ali" in text
+    assert reminders.whatsapp_url("03475093446", "hi there").startswith("https://wa.me/923475093446?text=hi%20there")
+    assert reminders.qist_message(db, cust)[1] == ""                    # no plan, nothing to say
+
+
+def test_reset_clears_qist_and_repairs(shop):
+    from app.services import installments as I, repairs, reset
+    db, sup, cust, prod = _stocked(shop)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 9000}])
+    I.create_plan(db, cust, 9000, 3, "2026-12-01")
+    repairs.create_job(db, "Zed", "", "Itel", "x", advance=100)
+    reset.reset_data(db, PW, "testing reset", ["customers"])
+    assert db.scalar("SELECT COUNT(*) FROM installment_plans") == 0 and db.scalar("SELECT COUNT(*) FROM repairs") == 0
+
+
+# ---------- barcode, labels, repair slip, price list ----------
+def test_barcode_field_scan_search_and_uniqueness(shop):
+    db, sup, cust, prod = shop
+    a = masters.add_product(db, "USB Cable", sale_price=300, category="Accessories", barcode="8901234")
+    assert masters.search_products(db, "8901234")[0]["id"] == a            # what a scanner types
+    with pytest.raises(BusinessError, match="already used"):
+        masters.add_product(db, "Other cable", sale_price=1, category="Accessories", barcode="8901234")
+    with pytest.raises(BusinessError, match="letters and digits"):
+        masters.add_product(db, "Bad", sale_price=1, category="Accessories", barcode="12 34")
+    masters.update_product(db, a, barcode="")
+    assert masters.search_products(db, f"{a:06d}")[0]["id"] == a           # label without barcode uses 6-digit ID
+    assert masters.barcode_for({"id": 7, "barcode": None}) == "000007"
+
+
+def test_labels_repair_slip_and_price_list_pdfs(shop, tmp_path):
+    from app.reports import builders as B
+    from app.reports.labels_pdf import build_labels_pdf
+    from app.reports.repair_slip import build_repair_slip
+    from app.services import repairs
+    db, sup, cust, prod = shop
+    for layout in ("sheet", "roll"):
+        out = build_labels_pdf(db, [(prod, 30 if layout == "sheet" else 2)], tmp_path / f"{layout}.pdf", layout)
+        assert open(out, "rb").read().startswith(b"%PDF")
+    with pytest.raises(ValueError):
+        build_labels_pdf(db, [(prod, 0)], tmp_path / "none.pdf")
+    j = repairs.create_job(db, "Bilal", "0300", "Samsung", "Screen", estimate=3000, advance=500)
+    for w in (80, 58):
+        assert open(build_repair_slip(db, j, tmp_path / f"slip{w}.pdf", w), "rb").read().startswith(b"%PDF")
+    rep = B.price_list_report(db)
+    assert rep["headers"] == ["Category", "Product", "Unit", "Price"] and rep["rows"]
+
+
+# ---------- backup while working, check, status ----------
+def test_periodic_backup_verify_and_status(tmp_path):
+    import time
+    from app.services import backup
+    data = tmp_path / "data"
+    data.mkdir()
+    db = auth.register(data, "Shop", "Addr", "03001234567", "a@b.com", None, "admin", PW, PW)
+    assert backup.last_backup_info(data)["time"] is None
+    with pytest.raises(BusinessError, match="no backup yet"):
+        backup.verify_latest(data)
+    first = backup.periodic_backup(db, every_minutes=120)
+    assert first and first.exists() and backup.last_backup_info(data)["name"] == first.name
+    assert backup.periodic_backup(db, every_minutes=120) is None                      # too soon
+    masters.add_party(db, "customer", "New Customer")                                 # data changed ...
+    assert backup.periodic_backup(db, every_minutes=120) is None                      # ... still too soon
+    later = time.time() + 3 * 3600
+    assert backup.periodic_backup(db, every_minutes=120, now_ts=later)                 # 3 hours later: backs up
+    assert backup.verify_latest(data).startswith("OK")
+    backup.save_settings(data, auto_backup=False)
+    assert backup.periodic_backup(db, every_minutes=0, now_ts=later + 99999) is None  # switched off
+    bad = tmp_path / "bad.bmbak"
+    bad.write_bytes(b"not a zip")
+    with pytest.raises(BusinessError):
+        backup.verify_backup(bad)
+    assert backup.removable_drives() == []                                           # not Windows here
+    db.close()
+
+
+def test_periodic_backup_copies_to_usb_folder(tmp_path):
+    from app.services import backup
+    data, usb = tmp_path / "data", tmp_path / "usb"
+    data.mkdir()
+    usb.mkdir()
+    db = auth.register(data, "Shop", "Addr", "03001234567", "a@b.com", None, "admin", PW, PW)
+    backup.save_settings(data, extra_folder=str(usb))
+    out = backup.periodic_backup(db)
+    assert (usb / out.name).exists()
+    db.close()
+
+
+def test_new_screens_compile_and_staff_can_use_them():
+    import py_compile
+    from app.services import permissions
+    for f in ("qist_ui", "repairs_ui", "labels_ui", "whatsapp", "modules", "main_window", "report_screens",
+              "backup_ui", "cash_recovery", "products"):
+        py_compile.compile(f"app/ui/{f}.py", doraise=True)
+    for key in ("qist", "repairs", "labels", "price_list", "qist_due"):
+        assert permissions.can_open("staff", key)
+    for key in ("profit_loss", "reset_db", "users", "audit_log", "backup"):
+        assert not permissions.can_open("staff", key)

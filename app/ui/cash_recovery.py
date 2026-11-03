@@ -6,11 +6,12 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QDateEdit, QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
                                QPushButton, QVBoxLayout)
 
-from ..services import payments, reports
+from ..services import payments, reminders, reports
 from ..services.common import BusinessError
 from .enter_safe import EnterSafeDialog
 from .party_picker import combo_party_id, make_party_combo
 from .printing import print_voucher
+from .whatsapp import send_whatsapp
 from .widgets import make_table, money, set_row
 
 _LABELS = {"invoice": "Sale", "receipt": "Cash received", "customer_payment": "Paid to customer",
@@ -82,6 +83,10 @@ class CashRecoveryDialog(EnterSafeDialog):
         save.clicked.connect(lambda: self._save(False))
         sp = QPushButton("Save && Print Voucher")
         sp.clicked.connect(lambda: self._save(True))
+        wa = QPushButton("WhatsApp Reminder")
+        wa.setObjectName("secondary")
+        wa.clicked.connect(self._whatsapp)
+        btns.insertWidget(0, wa)
         for b in (close, save, sp):
             btns.addWidget(b)
         root.addLayout(btns)
@@ -117,6 +122,14 @@ class CashRecoveryDialog(EnterSafeDialog):
     def _after_amount(self, *_):
         if combo_party_id(self.party):
             self.after.setText(money(round(self._current - self.amount.value(), 2)))
+
+    def _whatsapp(self):
+        pid = combo_party_id(self.party)
+        if not pid:
+            self.error.setText("Please select a customer")
+            return
+        phone, text = reminders.balance_message(self.db, pid)
+        send_whatsapp(self, phone, text)
 
     def _save(self, print_after):
         self.error.setText("")

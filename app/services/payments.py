@@ -1,4 +1,5 @@
 """Cash received/paid, expenses and vouchers. Everything posts to the cash book."""
+from . import installments
 from .common import BusinessError, audited, next_no, now, post_cash, post_ledger, r2
 
 
@@ -33,6 +34,7 @@ def receive_from_customer(db, party_id, amount, note="", date=None) -> str:
                         (party_id, date, amount, "receipt", note)).lastrowid
         c.execute("UPDATE ledger SET ref_id=? WHERE id=?", (ref, ref))
         post_cash(c, date, "in", amount, "receipt", ref, party_id, note)
+        installments.allocate(c, party_id, amount)          # counts towards his qist plan, if he has one
         return _voucher(c, "receipt", date, party_id, amount, "receipt", ref, note)
 
 

@@ -72,7 +72,7 @@ def reset_data(db, password, reason, options) -> dict:
     done = []
     with db.transaction() as c:
         if "transactions" in opts:
-            for table in ("invoice_items", "invoices", "purchase_items", "purchases", "return_items", "returns",
+            for table in ("installments", "installment_plans", "repairs", "invoice_items", "invoices", "purchase_items", "purchases", "return_items", "returns",
                           "serials", "stock_moves", "ledger", "cash_book", "expenses", "vouchers", "counters"):
                 c.execute(f"DELETE FROM {table}")
             done.append("transactions")
@@ -87,6 +87,7 @@ def reset_data(db, password, reason, options) -> dict:
             done.append("suppliers")
         if "balances" in opts:
             _clear_balances(c)
+            c.execute("UPDATE installment_plans SET status='closed' WHERE status='active'")   # nothing left to collect
             done.append("balances")
     return {"factory": False, "safety": safety, "done": done}
 

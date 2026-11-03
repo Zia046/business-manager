@@ -49,6 +49,7 @@ class ProductForm(QDialog):
         self.sale = _spin(p.get("sale_price", 0))
         self.opening = _spin(p.get("opening_stock", 0), 3)
         self.low = _spin(p.get("low_stock_level", 0), 3)
+        self.barcode = QLineEdit(p.get("barcode") or "", placeholderText="Optional - scan or type (letters/digits)")
         self.warranty = QSpinBox()
         self.warranty.setRange(0, 120)
         self.warranty.setSuffix(" month(s)")
@@ -68,6 +69,7 @@ class ProductForm(QDialog):
         form.addRow("Opening Stock", self.opening)
         form.addRow("Low-stock alert at", self.low)
         form.addRow("Warranty on sale", self.warranty)
+        form.addRow("Barcode", self.barcode)
         lay.addLayout(form)
         self.hint = QLabel("")
         self.hint.setObjectName("subtitle")
@@ -109,14 +111,15 @@ class ProductForm(QDialog):
                 masters.update_product(self.db, self.product["id"], name=self.name.text().strip(),
                                        category=cat, tags=self.tags.text(), unit=self.unit.text(),
                                        sale_price=self.sale.value(), low_stock_level=self.low.value(),
-                                       imei_mode=mode, warranty_months=self.warranty.value())
+                                       imei_mode=mode, warranty_months=self.warranty.value(),
+                                       barcode=self.barcode.text())
                 self.saved_id = self.product["id"]
             else:
                 self.saved_id = masters.add_product(
                     self.db, self.name.text(), self.sale.value(), self.purchase.value(),
                     self.opening.value(), cat, self.tags.text(), self.unit.text(),
                     self.low.value(), imei_mode=mode,
-                    warranty_months=self.warranty.value())
+                    warranty_months=self.warranty.value(), barcode=self.barcode.text())
         except BusinessError as exc:
             self.error.setText(str(exc))
             return

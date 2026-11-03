@@ -18,6 +18,9 @@ from .cash_recovery import CashRecoveryDialog
 from .categories_ui import CategoriesDialog
 from .import_ui import ImportDialog
 from .users_ui import UsersDialog
+from .qist_ui import QistWindow
+from .repairs_ui import RepairsWindow
+from .labels_ui import LabelsDialog
 from .printer_ui import PrinterSettingsDialog
 from .reset_ui import ResetDialog
 from .payments_ui import PaymentDialog
@@ -52,6 +55,9 @@ def _change_password(win):
 
 
 MODULES = {
+    "qist": lambda win: QistWindow(win.db, win).exec(),
+    "repairs": lambda win: RepairsWindow(win.db, win).exec(),
+    "labels": lambda win: LabelsDialog(win.db, win).exec(),
     "categories": lambda win: CategoriesDialog(win.db, win).exec(),
     "printer_settings": lambda win: PrinterSettingsDialog(win.db, win).exec(),
     "import_data": lambda win: ImportDialog(win.db, win).exec(),

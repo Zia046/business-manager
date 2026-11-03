@@ -2,11 +2,12 @@
 from PySide6.QtWidgets import QMessageBox
 
 from ..reports import builders as B
-from ..services import trading
+from ..services import reminders, trading
 from ..services.common import BusinessError, is_owner
 from .printing import print_invoice
 from .report_window import ReportWindow
 from .sale_invoice import SaleInvoiceDialog
+from .whatsapp import send_whatsapp
 
 
 def _simple(builder, title, use_dates=True, filter_kind=None):
@@ -65,6 +66,34 @@ def open_invoice_print(win):
     ReportWindow(win.db, B.invoice_list_report, "Invoice Print", parent=win, actions=actions).exec()
 
 
+def _party_by_cell(rw, sql):
+    value = rw.selected_first_cell()
+    if not value:
+        QMessageBox.information(rw, "Select", "Select a row first.")
+        return None
+    return rw.db.scalar(sql, (value,), None)
+
+
+def open_outstanding(win):
+    def remind(rw):
+        pid = _party_by_cell(rw, "SELECT id FROM parties WHERE id=? AND kind='customer'")
+        if pid:
+            phone, text = reminders.balance_message(rw.db, pid)
+            send_whatsapp(rw, phone, text)
+    ReportWindow(win.db, B.outstanding_report, "Outstanding / Baqayajat", use_dates=False, parent=win,
+                 actions=[("WhatsApp Reminder", remind)]).exec()
+
+
+def open_qist_due(win):
+    def remind(rw):
+        pid = _party_by_cell(rw, "SELECT party_id FROM installment_plans WHERE no=?")
+        if pid:
+            phone, text = reminders.qist_message(rw.db, pid)
+            send_whatsapp(rw, phone, text)
+    ReportWindow(win.db, B.qist_due_report, "Qist Due List", use_dates=False, parent=win,
+                 actions=[("WhatsApp Reminder", remind)]).exec()
+
+
 SCREENS = {
     "customer_transactions": _simple(B.customer_transactions_report, "Customer Transactions", filter_kind="customer"),
     "cash_received_report": _simple(B.cash_received_report, "Cash Received"),
@@ -74,7 +103,9 @@ SCREENS = {
     "product_ledger": _simple(B.product_ledger_report, "Products Ledger", filter_kind="product"),
     "all_balances": _simple(B.all_customer_balance_report, "All Customer Balance", use_dates=False),
     "products_report": _simple(B.products_report, "Products", use_dates=False),
-    "outstanding": _simple(B.outstanding_report, "Outstanding / Baqayajat", use_dates=False),
+    "outstanding": open_outstanding,
+    "qist_due": open_qist_due,
+    "price_list": _simple(B.price_list_report, "Price List", use_dates=False),
     "sale_summary": _simple(B.sale_summary_report, "Sale Summary"),
     "invoice_print": open_invoice_print,
     "imei_search": _simple(B.imei_search_report, "IMEI Search / History", use_dates=False, filter_kind="imei"),

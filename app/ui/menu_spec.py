@@ -28,6 +28,8 @@ MENUS = [
         ("Sale Return", "sale_return"),
         ("Products Purchase", "stock_purchase"),
         ("Purchase Return", "purchase_return"),
+        ("Installments (Qist)", "qist"),
+        ("Repair Jobs", "repairs"),
     ]),
     ("Payments/Receipts", [
         ("Cash Received from Customer", "cash_received"),
@@ -52,6 +54,9 @@ MENUS = [
         ("Products", "products_report"),
         ("IMEI Search / History", "imei_search"),
         ("Daily Closing", "daily_closing"),
+        ("Qist Due List", "qist_due"),
+        ("Price List", "price_list"),
+        ("Barcode / Price Labels", "labels"),
     ]),
     ("Utilities", [
         ("Backup", "backup"),
@@ -74,7 +79,7 @@ IMPLEMENTED = {"company_edit", "about", "change_password", "customers", "supplie
                "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return",
                "customer_transactions", "cash_received_report", "profit_loss", "invoice_wise", "stock_position",
                "product_ledger", "all_balances", "products_report", "outstanding", "sale_summary", "invoice_print",
-               "backup", "restore", "categories", "reset_db", "printer_settings", "imei_search", "daily_closing", "users", "audit_log", "import_data"}
+               "backup", "restore", "categories", "reset_db", "printer_settings", "imei_search", "daily_closing", "users", "audit_log", "import_data", "qist", "repairs", "qist_due", "price_list", "labels"}
 
 
 def all_keys():

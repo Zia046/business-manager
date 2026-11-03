@@ -103,10 +103,12 @@ def profit_loss(db, date_from, date_to):
                          "ON r.id=ri.return_id WHERE r.kind='sale' AND r.date BETWEEN ? AND ?", (a, b))
     exp = db.scalar("SELECT SUM(amount) FROM expenses WHERE date BETWEEN ? AND ?", (a, b))
     net_sales, net_cogs = r2(sales - ret), r2(cogs - ret_cost)
-    gross = r2(net_sales - net_cogs)
+    from .repairs import repair_totals
+    rep_inc, rep_cost = repair_totals(db, date_from, date_to)
+    gross = r2(net_sales - net_cogs + rep_inc - rep_cost)
     return {"sales": r2(sales), "sale_returns": r2(ret), "net_sales": net_sales,
-            "cost_of_goods": net_cogs, "gross_profit": gross, "expenses": r2(exp),
-            "net_profit": r2(gross - exp)}
+            "cost_of_goods": net_cogs, "repair_income": rep_inc, "repair_cost": rep_cost,
+            "gross_profit": gross, "expenses": r2(exp), "net_profit": r2(gross - exp)}
 
 
 def balance_sheet(db):
@@ -211,4 +213,7 @@ def dashboard(db, today=None):
     return {"today_sales": r2(sales), "today_invoices": n, "cash": cash_in_hand(db),
             "receivable": all_balances(db, "customer")["total"],
             "low_stock": sum(1 for r in stock if r["low"]),
-            "phones_in_stock": db.scalar("SELECT COUNT(*) FROM serials WHERE status='in_stock'")}
+            "phones_in_stock": db.scalar("SELECT COUNT(*) FROM serials WHERE status='in_stock'"),
+            "qist_overdue": db.scalar(
+                "SELECT COUNT(*) FROM installments ins JOIN installment_plans p ON p.id=ins.plan_id "
+                "WHERE p.status='active' AND ins.amount-ins.paid>0.004 AND ins.due_date < ?", (today,))}

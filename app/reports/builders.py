@@ -20,7 +20,7 @@ def _new(title, subtitle, headers, numeric=()):
 def _desc(r):
     labels = {"invoice": "Sale", "purchase": "Purchase", "receipt": "Cash received", "payment": "Paid to supplier",
               "customer_payment": "Paid to customer", "expense": "Expense", "sale_return": "Sale return",
-              "purchase_return": "Purchase return"}
+              "purchase_return": "Purchase return", "repair": "Repair"}
     base = labels.get(r["ref_type"], r["ref_type"])
     return f"{base}: {r['note']}" if r.get("note") else base
 
@@ -138,7 +138,8 @@ def profit_loss_report(db, date_from, date_to):
     p = R.profit_loss(db, date_from, date_to)
     rep = _new("Profit & Loss", f"{date_from}  to  {date_to}", ["Particulars", "Amount"], (1,))
     rows = [("Sales", p["sales"]), ("Less: sale returns", p["sale_returns"]), ("NET SALES", p["net_sales"]),
-            ("Cost of goods sold", p["cost_of_goods"]), ("GROSS PROFIT", p["gross_profit"]),
+            ("Cost of goods sold", p["cost_of_goods"]), ("Repair income (delivered jobs)", p["repair_income"]),
+            ("Less: repair parts cost", p["repair_cost"]), ("GROSS PROFIT", p["gross_profit"]),
             ("Expenses", p["expenses"]), ("NET PROFIT / (LOSS)", p["net_profit"])]
     for i, (a, b) in enumerate(rows):
         rep["rows"].append([a, money(b)])
@@ -190,7 +191,7 @@ def product_ledger_report(db, date_from, date_to, product_id=None):
     rep = _new("Products Ledger", f"{p['name']} (ID {p['id']})   {date_from}  to  {date_to}",
                ["Date", "Description", "Qty In", "Qty Out", "Balance"], (2, 3, 4))
     labels = {"invoice": "Sale", "purchase": "Purchase", "sale_return": "Sale return",
-              "purchase_return": "Purchase return"}
+              "purchase_return": "Purchase return", "repair": "Repair"}
     first = pl["rows"][0] if pl["rows"] else None
     opening = (first["balance"] - first["qty"]) if first else pl["closing"]
     rep["rows"].append(["", "Balance before this period", "", "", f"{opening:g}"])
@@ -321,4 +322,35 @@ def audit_log_report(db, date_from, date_to):
                       (date_from + " 00:00:00", date_to + " 23:59:59")):
         rep["rows"].append([r["date"][:16], r["user"] or "", r["action"], r["detail"] or ""])
     rep["summary"] = [("Entries", str(len(rep["rows"])))]
+    return rep
+
+
+def qist_due_report(db):
+    """Unpaid installments: who has to pay, how much, and how late."""
+    from ..services import installments as I
+    rows = I.due_list(db)
+    rep = _new("Qist Due List", "Unpaid installments, oldest first",
+               ["Plan", "Customer", "Phone", "Qist #", "Due date", "Remaining", "Status"], (3, 5))
+    late = 0.0
+    for r in rows:
+        if r["days_late"] > 0:
+            status, late = f"LATE {r['days_late']} days", late + r["remaining"]
+        elif r["days_late"] == 0:
+            status, late = "Due today", late + r["remaining"]
+        else:
+            status = f"in {-r['days_late']} days"
+        rep["rows"].append([r["plan_no"], r["customer"], r["phone"] or "", r["seq"], r["due_date"],
+                            money(r["remaining"]), status])
+    rep["summary"] = [("Unpaid installments", str(len(rows))), ("Due or late", money(late))]
+    return rep
+
+
+def price_list_report(db):
+    """Sale price list for customers / the shop board: category, product, price."""
+    rows = db.query("SELECT name, category, sale_price, unit FROM products WHERE active=1 "
+                    "ORDER BY category COLLATE NOCASE, name COLLATE NOCASE")
+    rep = _new("Price List", "Current sale prices", ["Category", "Product", "Unit", "Price"], (3,))
+    for r in rows:
+        rep["rows"].append([r["category"] or "", r["name"], r["unit"] or "", money(r["sale_price"])])
+    rep["summary"] = [("Products", str(len(rows)))]
     return rep

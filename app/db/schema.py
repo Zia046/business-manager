@@ -89,6 +89,7 @@ CREATE TABLE products (
     track_serial INTEGER NOT NULL DEFAULT 0,        -- 1 for mobile phones (IMEI tracked)
     imei_mode TEXT NOT NULL DEFAULT 'single',       -- 'single' or 'double' IMEI phone
     warranty_months INTEGER NOT NULL DEFAULT 0,     -- default warranty given on sale (0 = none)
+    barcode TEXT,                                   -- optional: printed on labels, found by a scanner
     active INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX idx_products_name ON products(name);
@@ -240,6 +241,7 @@ def migrate(conn):
     for table, col, ddl in (("users", "role", "TEXT NOT NULL DEFAULT 'owner'"), ("users", "name", "TEXT"),
                             ("users", "active", "INTEGER NOT NULL DEFAULT 1"),
                             ("products", "warranty_months", "INTEGER NOT NULL DEFAULT 0"),
+                            ("products", "barcode", "TEXT"),
                             ("invoice_items", "warranty_months", "INTEGER NOT NULL DEFAULT 0")):
         have = cols(table)
         if have and col not in have:              # (a table that does not exist at all is left alone)

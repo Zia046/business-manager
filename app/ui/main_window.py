@@ -37,11 +37,14 @@ class MainWindow(QMainWindow):
         dash = QTimer(self)
         dash.timeout.connect(self.refresh_dashboard)
         dash.start(20000)
+        auto = QTimer(self)                          # backup while working, not only when closing
+        auto.timeout.connect(lambda: backup.periodic_backup(self.db))
+        auto.start(10 * 60 * 1000)
         self._tick()
         timer = QTimer(self)  # live clock, updates every second
         timer.timeout.connect(self._tick)
         timer.start(1000)
-        self.resize(1000, 700)
+        self.resize(1150, 720)
 
     # ---------- menu bar ----------
     def _build_menu(self):
@@ -105,11 +108,15 @@ class MainWindow(QMainWindow):
         cards = QHBoxLayout()
         cards.addStretch()
         self.cards = {}
+        owner_only = {"cash", "receivable", "last_backup"}
         for key, title in (("today_sales", "Today's Sale"), ("cash", "Cash in Hand"),
                            ("receivable", "Customers Owe You"), ("low_stock", "Low-stock Items"),
-                           ("phones_in_stock", "Phones in Stock")):
+                           ("phones_in_stock", "Phones in Stock"), ("qist_overdue", "Qist Overdue"),
+                           ("last_backup", "Last Backup")):
+            if key in owner_only and self.user["role"] != "owner":
+                continue                                     # staff do not see money totals or backup state
             box = QLabel(alignment=Qt.AlignCenter)
-            box.setMinimumWidth(170)
+            box.setMinimumWidth(128)
             box.setStyleSheet("background: white; border: 1px solid #c9d6e8; border-radius: 10px; padding: 8px;")
             cards.addWidget(box)
             self.cards[key] = (box, title)
@@ -131,9 +138,14 @@ class MainWindow(QMainWindow):
             return                                   # never let a card problem stop the program
         vals = {"today_sales": f"{d['today_sales']:,.0f}  ({d['today_invoices']} bills)", "cash": f"{d['cash']:,.0f}",
                 "receivable": f"{d['receivable']:,.0f}", "low_stock": str(d["low_stock"]),
-                "phones_in_stock": str(d["phones_in_stock"])}
+                "phones_in_stock": str(d["phones_in_stock"]), "qist_overdue": str(d["qist_overdue"])}
+        info = backup.last_backup_info(self.db.data_dir)
+        hours = info["age_hours"]
+        vals["last_backup"] = ("Never!" if hours is None else "Just now" if hours < 1 else
+                               f"{hours:.0f} hours ago" if hours < 48 else f"{hours / 24:.0f} days ago")
         for key, (box, title) in self.cards.items():
-            red = key == "low_stock" and d["low_stock"] > 0
+            red = (key == "low_stock" and d["low_stock"] > 0) or (key == "qist_overdue" and d["qist_overdue"] > 0) \
+                or (key == "last_backup" and (hours is None or hours > 48))
             box.setText(f"<span style='color:#6b7280;font-size:12px'>{title}</span><br>"
                         f"<span style='font-size:18px;font-weight:700;color:{'#c0392b' if red else '#1b6ef3'}'>"
                         f"{vals[key]}</span>")
