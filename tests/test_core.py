@@ -1463,3 +1463,14 @@ def test_owner_can_set_cash_in_hand_with_password_but_staff_cannot(tmp_path):
         cash.set_cash_in_hand(s, 1, "staffpw1")                        # staff can never change it
     s.close()
     common.set_current_user(None)
+
+
+def test_product_picker_rows_hide_purchase_price_from_staff(shop):
+    from app.ui.picker_rows import picker_columns, picker_row
+    db, sup, cust, prod = shop
+    masters.add_product(db, "Charger", sale_price=500, purchase_price=320, category="Accessories")
+    p = masters.search_products(db, "charger")[0]
+    assert picker_columns(True)[-2:] == ["Last purchase price", "Average cost"]
+    assert picker_row(p, True)[1] == "Charger" and picker_row(p, True)[5] == "320.00"
+    assert picker_columns(False) == ["ID", "Product", "Category", "In stock", "Sale price"]
+    assert "320.00" not in picker_row(p, False) and len(picker_row(p, False)) == 5

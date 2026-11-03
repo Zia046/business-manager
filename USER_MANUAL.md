@@ -133,3 +133,6 @@ Purchase save hone par nayi price product mein update ho jati hai (pehle ki tara
 - Home par 8 rangeen buttons (nila, hara, jamni, narangi, firozi, gulabi, lime, indigo) tasveer, number aur gol teer ke saath; upar banner mein logo, dukan ka naam, tareekh aur ghari; neeche aaj ke numbers aur Developed by wali patti.
 - **Cash in Hand badalna (sirf Admin):** Home ke neeche "Cash in Hand" wale khane par click karein, asal ginti ki raqam likhein, Admin ka password dein aur Save karein. Farq Cash Book mein "Cash adjustment" ki line ban kar likha jata hai (purani entries nahi badalti) aur Audit Log mein bhi aata hai.
 - Staff ko Cash in Hand, baqayajat ke totals aur backup ki maloomat nazar nahi aati, aur wo ise badal nahi sakte.
+
+## Sale Invoice: Select from list
+Product search wale khanay ke saath **Select from list** button (ya F6) hai. Is se poori inventory ki list khulti hai: ID, product, category, stock mein maujood quantity aur sale price. Admin ko saath mein **Last purchase price** aur **Average cost** bhi nazar aati hai (staff ko purchase price nahi dikhti). Upar search box se dhoondein, Up/Down se chunein, Enter ya double-click se product invoice mein pehle ki tarah add ho jata hai (cursor Quantity par jata hai; phone ho to IMEI poochta hai).

@@ -13,6 +13,7 @@ from .imei_dialogs import ask_sale_imei
 from .invoice_model import InvoiceDraft
 from .parties import PartyForm
 from .printing import print_invoice
+from .product_picker import ProductPickerDialog
 from .widgets import money
 
 COLS = ["ID", "Product", "Stock", "Qty", "Price", "Discount", "Amount", ""]
@@ -123,7 +124,17 @@ class SaleInvoiceDialog(EnterSafeDialog):
                                                 "(Enter = add)")
         self.search.textChanged.connect(self._search_products)
         self.search.returnPressed.connect(self._add_from_search)
-        root.addWidget(self.search)
+        srow = QHBoxLayout()
+        srow.addWidget(self.search, 1)
+        pick = QPushButton("Select from list")
+        pick.setToolTip("Open the whole inventory with stock and prices (F6)")
+        pick.setAutoDefault(False)
+        pick.setDefault(False)
+        pick.setFocusPolicy(Qt.NoFocus)
+        pick.clicked.connect(self._pick_from_list)
+        srow.addWidget(pick)
+        QShortcut(QKeySequence("F6"), self, activated=self._pick_from_list)
+        root.addLayout(srow)
         self.results = QListWidget()
         self.results.setMaximumHeight(62)
         self.results.itemDoubleClicked.connect(lambda _: self._add_from_search())
@@ -269,7 +280,16 @@ class SaleInvoiceDialog(EnterSafeDialog):
         item = self.results.currentItem()
         if not item:
             return
-        p = item.data(Qt.UserRole)
+        self._add_product(item.data(Qt.UserRole))
+
+    def _pick_from_list(self):
+        dlg = ProductPickerDialog(self.db, self, self.search.text())
+        if dlg.exec() and dlg.chosen:
+            self._add_product(dlg.chosen)
+        else:
+            self.search.setFocus()
+
+    def _add_product(self, p):
         serial = serial2 = None
         if p["track_serial"]:
             # The phone is NOT picked from the stock list: its IMEI must be typed again here.
