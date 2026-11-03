@@ -15,6 +15,7 @@ from .returns_ui import ReturnDialog
 from .backup_ui import BackupDialog, restore_dialog
 from .account_screens import open_balance_sheet, open_cash_book, open_vouchers
 from .cash_recovery import CashRecoveryDialog
+from .cash_adjust import CashAdjustDialog
 from .categories_ui import CategoriesDialog
 from .import_ui import ImportDialog
 from .users_ui import UsersDialog
@@ -55,6 +56,7 @@ def _change_password(win):
 
 
 MODULES = {
+    "dashboard": lambda win: win.show_dashboard(),
     "qist": lambda win: QistWindow(win.db, win).exec(),
     "repairs": lambda win: RepairsWindow(win.db, win).exec(),
     "labels": lambda win: LabelsDialog(win.db, win).exec(),
@@ -71,6 +73,7 @@ MODULES = {
     "balance_sheet": open_balance_sheet,
     "vouchers": open_vouchers,
     "stock_purchase": lambda win: StockPurchaseDialog(win.db, win).exec(),
+    "cash_in_hand": lambda win: CashAdjustDialog(win.db, win).exec(),
     "cash_received": lambda win: CashRecoveryDialog(win.db, win).exec(),
     "pay_supplier": lambda win: PaymentDialog(win.db, "pay_supplier", win).exec(),
     "pay_customer": lambda win: PaymentDialog(win.db, "pay_customer", win).exec(),

@@ -20,7 +20,7 @@ def _new(title, subtitle, headers, numeric=()):
 def _desc(r):
     labels = {"invoice": "Sale", "purchase": "Purchase", "receipt": "Cash received", "payment": "Paid to supplier",
               "customer_payment": "Paid to customer", "expense": "Expense", "sale_return": "Sale return",
-              "purchase_return": "Purchase return", "repair": "Repair"}
+              "purchase_return": "Purchase return", "repair": "Repair", "cash_adjust": "Cash adjustment"}
     base = labels.get(r["ref_type"], r["ref_type"])
     return f"{base}: {r['note']}" if r.get("note") else base
 

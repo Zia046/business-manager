@@ -119,7 +119,7 @@ Agar seedha print na ho sake to bill PDF mein khul jata hai, bill zaya nahi hota
 **Backup:** ab software chalte huye bhi har 2 ghante baad (agar data badla ho) khud backup banata hai, aur band hone par bhi. Utilities > Backup mein **Check Latest Backup** se jaanch, aur **USB drives found** se USB chun kar har backup ki copy USB mein bhi. Home par "Last Backup" card 2 din se purana ho to surkh ho jata hai.
 
 ## Dashboard (naya)
-Menu bar mein sab se pehle **Dashboard** (aur **Home**) ka button hai; F5 dabane se bhi Dashboard khulta hai. Home par bhi upar "Dashboard" button hai. Agar 90 second tak koi kaam na ho (mouse/keyboard) to software khud Dashboard khula chhor deta hai (koi window khuli ho to nahi chhedta).
+Menu bar mein ab sirf **Home** hai. Dashboard Home ke 8 rangeen buttons mein **8. Dashboard** (Profit Loss ke saath) hai; F5 dabane se bhi khulta hai. Agar 90 second tak koi kaam na ho (mouse/keyboard) to software khud Dashboard khula chhor deta hai (koi window khuli ho to nahi chhedta).
 
 Dashboard mein: upar logo aur dukan ki maloomat; aaj/mahine ki sale, phones, low stock, qist, repairs, cash aur baqayajat ke cards; **Daily, Weekly, Monthly, Yearly sale ke graph**; neeche **Profit / Loss graph** (hara = munafa, surkh = nuqsan); sab se ziada bikne wali cheezein, kam stock aur qist due ki list; dayein taraf ghari aur calendar. Sab se neeche "Developed by Burhan Nexus, mobile aur email" hamesha nazar aata hai (sirf label hai, badla ya mitaya nahi ja sakta).
 Staff ko cash, baqayajat, munafa aur profit graph nazar nahi aate.
@@ -128,3 +128,8 @@ Staff ko cash, baqayajat, munafa aur profit graph nazar nahi aate.
 Jab purchase mein koi product add karein to uski pichli (saved) purchase price Price wale khanay mein khud aa jati hai (halka hara rang).
 Quantity likh kar Enter dabayein, cursor Price par aaye ga: purani price edit ho sakti hai, mita kar nayi price likh dein.
 Purchase save hone par nayi price product mein update ho jati hai (pehle ki tarah). Jis product ki price kabhi save nahi hui, uska khana peela rahta hai aur price likhni parti hai.
+
+## Naya Home page aur Cash in Hand
+- Home par 8 rangeen buttons (nila, hara, jamni, narangi, firozi, gulabi, lime, indigo) tasveer, number aur gol teer ke saath; upar banner mein logo, dukan ka naam, tareekh aur ghari; neeche aaj ke numbers aur Developed by wali patti.
+- **Cash in Hand badalna (sirf Admin):** Home ke neeche "Cash in Hand" wale khane par click karein, asal ginti ki raqam likhein, Admin ka password dein aur Save karein. Farq Cash Book mein "Cash adjustment" ki line ban kar likha jata hai (purani entries nahi badalti) aur Audit Log mein bhi aata hai.
+- Staff ko Cash in Hand, baqayajat ke totals aur backup ki maloomat nazar nahi aati, aur wo ise badal nahi sakte.

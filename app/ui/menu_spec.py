@@ -12,6 +12,7 @@ HOME_BUTTONS = [
     ("Outstanding / Baqayajat", "outstanding"),
     ("Sale Summary", "sale_summary"),
     ("Profit Loss Report", "profit_loss"),
+    ("Dashboard", "dashboard"),
 ]
 
 MENUS = [
@@ -74,7 +75,7 @@ MENUS = [
 SHORTCUTS = {"sale_invoice": "F2", "stock_purchase": "F3", "cash_received": "F4"}
 
 # Screens that are built (everything else shows a placeholder). Updated as steps finish.
-IMPLEMENTED = {"company_edit", "about", "change_password", "customers", "suppliers", "products", "sale_invoice",
+IMPLEMENTED = {"dashboard", "company_edit", "about", "change_password", "customers", "suppliers", "products", "sale_invoice",
                "stock_purchase", "cash_received", "pay_supplier", "pay_customer", "expenses",
                "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return",
                "customer_transactions", "cash_received_report", "profit_loss", "invoice_wise", "stock_position",

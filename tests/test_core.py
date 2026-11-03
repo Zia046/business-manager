@@ -214,7 +214,7 @@ def test_menu_spec_matches_requirements():
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
     assert [len(i) for _, i in MENUS] == [6, 6, 4, 3, 14, 8]
-    assert len(HOME_BUTTONS) == 7
+    assert len(HOME_BUTTONS) == 8 and HOME_BUTTONS[-1][1] == "dashboard"
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
 
@@ -1435,3 +1435,31 @@ def test_purchase_price_comes_from_last_saved_price_and_can_change(shop):
     assert p2["last_purchase_price"] == 650                                        # next time 650 is suggested
     assert PurchaseDraft().add_product(p2)["price"] == 650
     assert stock_qty(db.conn, prod) == 10
+
+
+def test_owner_can_set_cash_in_hand_with_password_but_staff_cannot(tmp_path):
+    from app.services import cash, common, reports as R
+    owner = auth.register(tmp_path, "Shop", "A", "03001234567", "a@b.com", None, "owner1", PW, PW)
+    common.set_current_user({"login_id": "owner1", "role": "owner"})
+    masters.add_party(owner, "customer", "Ali")
+    assert R.cash_in_hand(owner) == 0
+    with pytest.raises(BusinessError):
+        cash.set_cash_in_hand(owner, 5000, "wrong-pw")                 # password is required
+    assert cash.set_cash_in_hand(owner, 5000, PW, "counted drawer") == 5000
+    assert R.cash_in_hand(owner) == 5000
+    assert cash.set_cash_in_hand(owner, 3200.5, PW) == -1799.5         # can also go down
+    assert R.cash_in_hand(owner) == 3200.5
+    assert cash.set_cash_in_hand(owner, 3200.5, PW) == 0               # same amount: nothing posted
+    with pytest.raises(BusinessError):
+        cash.set_cash_in_hand(owner, -1, PW)
+    rows = R.cash_book(owner, "2000-01-01", "2999-12-31")["rows"]
+    assert [r["ref_type"] for r in rows] == ["cash_adjust", "cash_adjust"]          # old entries untouched
+    assert owner.one("SELECT detail FROM audit_log WHERE action='Cash in Hand changed' ORDER BY id DESC")
+    auth.add_staff(owner, PW, "Bilal", "bilal", "staffpw1")
+    owner.close()
+    s = auth.login(tmp_path, "bilal", "staffpw1")
+    common.set_current_user({"login_id": "bilal", "role": "staff"})
+    with pytest.raises(BusinessError):
+        cash.set_cash_in_hand(s, 1, "staffpw1")                        # staff can never change it
+    s.close()
+    common.set_current_user(None)
