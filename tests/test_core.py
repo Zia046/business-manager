@@ -291,7 +291,7 @@ def test_purchase_draft_requires_typed_price(shop):
     p = masters.search_products(db, "samsung")[0]
     d = PurchaseDraft()
     ln = d.add_product(p)
-    assert ln["price"] is None and len(d.missing_prices()) == 1   # never auto-filled
+    assert ln["price"] is None and len(d.missing_prices()) == 1   # no saved price yet: it must be typed
     ln["price"], ln["qty"] = 41000, 3
     assert d.total() == 123000 and not d.missing_prices()
     pid = trading.create_purchase(db, sup, d.service_items(), paid=23000)
@@ -1417,3 +1417,21 @@ def test_dashboard_and_main_window_modules_load():
     assert "Developed by" in src and "NoTextInteraction" in src and "_build_footer" in src
     dash = open("app/ui/dashboard.py", encoding="utf-8").read()
     assert "Home Screen" in dash and "Profit / Loss per month" in dash and "QCalendarWidget" in dash
+
+
+def test_purchase_price_comes_from_last_saved_price_and_can_change(shop):
+    from app.ui.purchase_model import PurchaseDraft
+    db, sup, cust, _ = shop
+    prod = masters.add_product(db, "Earphones", sale_price=900, purchase_price=600, category="Accessories")
+    p = masters.search_products(db, "earphones")[0]
+    d = PurchaseDraft()
+    ln = d.add_product(p)
+    assert ln["price"] == 600 and ln["price_saved"] and not d.missing_prices()      # filled in, nothing to type
+    ln["qty"] = 10
+    assert d.total() == 6000
+    ln["price"] = 650                                                              # the person changes it
+    trading.create_purchase(db, sup, d.service_items(), paid=6500)
+    p2 = masters.search_products(db, "earphones")[0]
+    assert p2["last_purchase_price"] == 650                                        # next time 650 is suggested
+    assert PurchaseDraft().add_product(p2)["price"] == 650
+    assert stock_qty(db.conn, prod) == 10

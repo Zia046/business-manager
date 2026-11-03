@@ -123,3 +123,8 @@ Menu bar mein sab se pehle **Dashboard** (aur **Home**) ka button hai; F5 dabane
 
 Dashboard mein: upar logo aur dukan ki maloomat; aaj/mahine ki sale, phones, low stock, qist, repairs, cash aur baqayajat ke cards; **Daily, Weekly, Monthly, Yearly sale ke graph**; neeche **Profit / Loss graph** (hara = munafa, surkh = nuqsan); sab se ziada bikne wali cheezein, kam stock aur qist due ki list; dayein taraf ghari aur calendar. Sab se neeche "Developed by Burhan Nexus, mobile aur email" hamesha nazar aata hai (sirf label hai, badla ya mitaya nahi ja sakta).
 Staff ko cash, baqayajat, munafa aur profit graph nazar nahi aate.
+
+## Stock Purchase: purani price khud aa jati hai
+Jab purchase mein koi product add karein to uski pichli (saved) purchase price Price wale khanay mein khud aa jati hai (halka hara rang).
+Quantity likh kar Enter dabayein, cursor Price par aaye ga: purani price edit ho sakti hai, mita kar nayi price likh dein.
+Purchase save hone par nayi price product mein update ho jati hai (pehle ki tarah). Jis product ki price kabhi save nahi hui, uska khana peela rahta hai aur price likhni parti hai.

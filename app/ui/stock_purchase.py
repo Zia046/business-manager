@@ -166,6 +166,7 @@ class StockPurchaseDialog(EnterSafeDialog):
             serials = units
         self._stock[p["id"]] = p["stock"]
         ln = self.draft.add_product(p, serials)
+        ln.setdefault("price_start", ln["price"])
         idx = self.draft.lines.index(ln)
         self._refresh_table()
         QTimer.singleShot(0, lambda: self._edit_cell(idx, C_QTY if not ln["track_serial"] else C_PRICE))
@@ -196,6 +197,8 @@ class StockPurchaseDialog(EnterSafeDialog):
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if col == C_PRICE and ln["price"] is None:
                     it.setBackground(QColor("#fff4d6"))  # price still to be typed
+                elif col == C_PRICE and ln.get("price_saved") and ln["price"] == ln.get("price_start"):
+                    it.setBackground(QColor("#e6f6e6"))  # filled from the saved purchase price (can be changed)
                 self.table.setItem(r, col, it)
             rm = QPushButton("Remove")
             rm.setObjectName("secondary")

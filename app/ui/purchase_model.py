@@ -1,4 +1,5 @@
-"""Purchase draft (Qt-free, testable). Price is never pre-filled: it stays None until typed."""
+"""Purchase draft (Qt-free, testable). The price starts as the product's last saved purchase price (it can be
+changed); a product that has no saved price stays None until the price is typed."""
 from ..services.common import r2
 
 
@@ -14,7 +15,9 @@ class PurchaseDraft:
                 if ln["product_id"] == p["id"]:
                     ln["qty"] += 1
                     return ln
-        ln = {"product_id": p["id"], "name": p["name"], "qty": float(len(serials) or 1), "price": None,
+        saved = p.get("last_purchase_price") or 0
+        ln = {"product_id": p["id"], "name": p["name"], "qty": float(len(serials) or 1),
+              "price": float(saved) if saved > 0 else None, "price_saved": saved > 0,
               "serials": serials, "track_serial": bool(p["track_serial"]),
               "imei_mode": p.get("imei_mode", "single")}
         self.lines.append(ln)
