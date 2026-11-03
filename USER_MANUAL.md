@@ -136,3 +136,6 @@ Purchase save hone par nayi price product mein update ho jati hai (pehle ki tara
 
 ## Sale Invoice: Select from list
 Product search wale khanay ke saath **Select from list** button (ya F6) hai. Is se poori inventory ki list khulti hai: ID, product, category, stock mein maujood quantity aur sale price. Admin ko saath mein **Last purchase price** aur **Average cost** bhi nazar aati hai (staff ko purchase price nahi dikhti). Upar search box se dhoondein, Up/Down se chunein, Enter ya double-click se product invoice mein pehle ki tarah add ho jata hai (cursor Quantity par jata hai; phone ho to IMEI poochta hai).
+
+## Sale Invoice: pichla sold rate
+Agar customer (walk-in nahi) pehle bhi wahi product khareed chuka ho to Sale Invoice ke neeche, Profit/Loss ke niche peeli patti mein us product ka **previous sold rate** nazar aata hai (quantity, discount, tareekh aur bill number ke saath). Ye har product ke liye alag likha aata hai aur customer badalne par khud badal jata hai. Cancel kiye hue bills shamil nahi hote.

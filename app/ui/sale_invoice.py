@@ -171,6 +171,13 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.profit_lbl = QLabel()
         self.profit_lbl.setStyleSheet("font-size: 15px; font-weight: 700;")
         left.addWidget(self.profit_lbl)
+        self.prev_lbl = QLabel()                 # what this customer paid last time for the same products
+        self.prev_lbl.setTextFormat(Qt.RichText)
+        self.prev_lbl.setWordWrap(True)
+        self.prev_lbl.setStyleSheet("font-size: 13px; color: #1f2937; background: #fff8e1; "
+                                    "border: 1px solid #f0d98a; border-radius: 8px; padding: 4px 8px;")
+        self.prev_lbl.hide()
+        left.addWidget(self.prev_lbl)
         self.warn = QLabel()
         self.warn.setObjectName("error")
         self.warn.setWordWrap(True)
@@ -399,6 +406,25 @@ class SaleInvoiceDialog(EnterSafeDialog):
             self._paid_manual = True
         self._recalc()
 
+    def _show_previous_rates(self):
+        """Under Profit/Loss: the previous sold rate of each product on this bill to the same customer."""
+        pid = self._party_id()
+        lines = self.draft.lines
+        if not pid or self._is_walkin() or not lines:
+            self.prev_lbl.hide()
+            return
+        prev = trading.last_sold_prices(self.db, pid, [ln["product_id"] for ln in lines], self.invoice_id)
+        parts = []
+        for ln in lines:
+            r = prev.get(ln["product_id"])
+            if not r:
+                continue
+            disc = f", discount {money(r['discount'])}" if r["discount"] else ""
+            parts.append(f"<b>{ln['name']}</b>: previous sold rate <b>{money(r['price'])}</b> "
+                         f"(qty {r['qty']:g}{disc}, {r['date'][:10]}, bill {r['no']})")
+        self.prev_lbl.setText("<br>".join(parts))
+        self.prev_lbl.setVisible(bool(parts))
+
     def _recalc(self, *_):
         d = self.draft
         d.discount = self.disc.value()
@@ -416,6 +442,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.profit_lbl.setText(("Profit: " if profit >= 0 else "Loss: ") + money(abs(profit)))
         self.profit_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: "
                                       + ("#12803c" if profit >= 0 else "#d92d20"))
+        self._show_previous_rates()
         over = [ln for ln in d.over_stock() if not ln["track_serial"]]
         self.warn.setText("Not enough stock: " + ", ".join(f"{ln['name']} (have {ln['stock']:g})"
                                                           for ln in over) if over else "")

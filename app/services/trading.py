@@ -397,3 +397,19 @@ def purchase_return(db, supplier_id, items, received=0.0, ref_purchase_id=None, 
 
 
 __all__ = ["customer_balance", "supplier_balance"]
+
+
+def last_sold_prices(db, party_id, product_ids, exclude_invoice_id=None):
+    """For each product: the most recent sale of it to this customer (price, qty, discount, date, bill number).
+    Cancelled bills and the invoice being edited are ignored. Returns {product_id: row}."""
+    out = {}
+    if not party_id:
+        return out
+    for pid in set(product_ids):
+        row = db.one("SELECT i.no, i.date, it.price, it.qty, it.discount FROM invoice_items it "
+                     "JOIN invoices i ON i.id = it.invoice_id "
+                     "WHERE i.party_id=? AND it.product_id=? AND i.status='active' AND i.id<>? "
+                     "ORDER BY i.date DESC, i.id DESC LIMIT 1", (party_id, pid, exclude_invoice_id or 0))
+        if row:
+            out[pid] = row
+    return out

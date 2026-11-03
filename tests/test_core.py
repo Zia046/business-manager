@@ -1474,3 +1474,15 @@ def test_product_picker_rows_hide_purchase_price_from_staff(shop):
     assert picker_row(p, True)[1] == "Charger" and picker_row(p, True)[5] == "320.00"
     assert picker_columns(False) == ["ID", "Product", "Category", "In stock", "Sale price"]
     assert "320.00" not in picker_row(p, False) and len(picker_row(p, False)) == 5
+
+
+def test_last_sold_price_to_same_customer(shop):
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 10, "price": 100}], paid=1000)
+    assert trading.last_sold_prices(db, cust, [prod]) == {}                       # never sold yet
+    a = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 150}], paid=150)
+    b = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 2, "price": 160, "discount": 10}], paid=0)
+    got = trading.last_sold_prices(db, cust, [prod])[prod]
+    assert got["price"] == 160 and got["qty"] == 2 and got["discount"] == 10          # the latest bill
+    assert trading.last_sold_prices(db, cust, [prod], exclude_invoice_id=b)[prod]["price"] == 150
+    assert trading.last_sold_prices(db, 99999, [prod]) == {}                      # other customer: nothing
