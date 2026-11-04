@@ -99,6 +99,7 @@ SCREENS = {
     "cash_received_report": _simple(B.cash_received_report, "Cash Received"),
     "profit_loss": _simple(B.profit_loss_report, "Profit & Loss"),
     "invoice_wise": _simple(B.invoice_wise_report, "Invoice Wise Sale Summary"),
+    "low_stock": _simple(B.low_stock_report, "Low Stock", use_dates=False),
     "stock_position": _simple(B.stock_position_report, "Stock Position", use_dates=False),
     "product_ledger": _simple(B.product_ledger_report, "Products Ledger", filter_kind="product"),
     "all_balances": _simple(B.all_customer_balance_report, "All Customer Balance", use_dates=False),

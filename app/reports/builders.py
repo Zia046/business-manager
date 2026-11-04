@@ -183,6 +183,21 @@ def stock_position_report(db):
     return rep
 
 
+def low_stock_report(db):
+    """Only the products that are finished or at/below their low-stock level (no cost figures: staff may open it)."""
+    sp = R.stock_position(db)
+    items = sorted((r for r in sp["rows"] if r["low"]), key=lambda r: (r["qty"] > 0, r["qty"], r["name"].lower()))
+    rep = _new("Low Stock", "Products that are finished or running low",
+               ["ID", "Product", "Category", "Quantity", "Low-stock level", "Sale Price", "Status"], (3, 4, 5))
+    for r in items:
+        rep["rows"].append([r["id"], r["name"], r["category"] or "", f"{r['qty']:g}", f"{r['low_stock_level']:g}",
+                            money(r["sale_price"]), "OUT OF STOCK" if r["qty"] <= 0 else "LOW STOCK"])
+    out = sum(1 for r in items if r["qty"] <= 0)
+    rep["summary"] = [("Finished", str(out)), ("Running low", str(len(items) - out)), ("Total", str(len(items)))]
+    rep["low_rows"] = set(range(len(items)))
+    return rep
+
+
 def product_ledger_report(db, date_from, date_to, product_id=None):
     if not product_id:
         return _empty("Products Ledger", "Select a product above")

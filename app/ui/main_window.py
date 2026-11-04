@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
         self.name.setStyleSheet(f"font-size: 40px; font-weight: 800; color: {NAVY}; background: transparent;")
         self.name.setWordWrap(True)
         mid.addWidget(self.name)
-        tag = QLabel("Complete Business Management Solution")
+        self.tag = tag = QLabel("")
         tag.setStyleSheet("background: #0d3b99; color: white; font-size: 18px; font-weight: 600; "
                           "border-radius: 18px; padding: 6px 22px;")
         tag.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
@@ -274,6 +274,10 @@ class MainWindow(QMainWindow):
                 cell.setToolTip("Click to change Cash in Hand (password needed)")
                 cell.clicked.connect(lambda: (open_module(self, "cash_in_hand", "Cash in Hand"),
                                               self.refresh_dashboard()))
+            if key == "low_stock":
+                cell.setCursor(Qt.PointingHandCursor)
+                cell.setToolTip("Click to see the products that are low or finished")
+                cell.clicked.connect(lambda: open_module(self, "low_stock", "Low Stock"))
             sl.addWidget(cell, 1)
             self.cards[key] = (v, title)
         body.addWidget(strip)
@@ -356,6 +360,8 @@ class MainWindow(QMainWindow):
         co = masters.get_company(self.db)
         self.setWindowTitle(co["name"])
         self.name.setText(co["name"])
+        self.tag.setText(co.get("slogan") or "")
+        self.tag.setVisible(bool(co.get("slogan")))
         self.slogan.setText("Grow Your Business with " + co["name"])
         if co["logo_path"] and Path(co["logo_path"]).exists():
             self.logo.setPixmap(QPixmap(co["logo_path"]).scaled(150, 150, Qt.KeepAspectRatio,

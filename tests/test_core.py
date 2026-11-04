@@ -1486,3 +1486,25 @@ def test_last_sold_price_to_same_customer(shop):
     assert got["price"] == 160 and got["qty"] == 2 and got["discount"] == 10          # the latest bill
     assert trading.last_sold_prices(db, cust, [prod], exclude_invoice_id=b)[prod]["price"] == 150
     assert trading.last_sold_prices(db, 99999, [prod]) == {}                      # other customer: nothing
+
+
+def test_slogan_is_editable_and_low_stock_report_lists_only_low_items(shop):
+    from app.reports import builders as B
+    db, sup, cust, prod = shop
+    assert masters.get_company(db)["slogan"] == "Complete Business Management Solution"       # default for old shops too
+    co = masters.get_company(db)
+    masters.update_company(db, co["name"], co["address"], co["phone"], co["email"], None, "Smart Business")
+    assert masters.get_company(db)["slogan"] == "Smart Business"
+    masters.update_company(db, co["name"], co["address"], co["phone"], co["email"])          # slogan untouched
+    assert masters.get_company(db)["slogan"] == "Smart Business"
+    masters.update_company(db, co["name"], co["address"], co["phone"], co["email"], None, "")
+    assert masters.get_company(db)["slogan"] == ""
+    ok = masters.add_product(db, "Plenty", sale_price=100, purchase_price=50, category="Accessories", low_stock_level=2)
+    trading.create_purchase(db, sup, [{"product_id": ok, "qty": 20, "price": 50}], paid=1000)
+    rep = B.low_stock_report(db)
+    names = [r[1] for r in rep["rows"]]
+    assert "Plenty" not in names and rep["rows"]                          # well stocked: not listed
+    assert all(r[6] in ("OUT OF STOCK", "LOW STOCK") for r in rep["rows"])
+    assert not any("avg" in h.lower() or "cost" in h.lower() for h in rep["headers"])   # no cost figures
+    from app.services import permissions
+    assert permissions.can_open("staff", "low_stock")
