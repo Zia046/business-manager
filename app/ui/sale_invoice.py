@@ -120,7 +120,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         root.addLayout(row)
 
         # ---- product search ----
-        self.search = QLineEdit(placeholderText="Search product: name, #tag, ID or similar spelling... "
+        self.search = QLineEdit(placeholderText="Search product: name, #tag, ID, scan barcode or similar spelling... "
                                                 "(Enter = add)")
         self.search.textChanged.connect(self._search_products)
         self.search.returnPressed.connect(self._add_from_search)

@@ -1508,3 +1508,36 @@ def test_slogan_is_editable_and_low_stock_report_lists_only_low_items(shop):
     assert not any("avg" in h.lower() or "cost" in h.lower() for h in rep["headers"])   # no cost figures
     from app.services import permissions
     assert permissions.can_open("staff", "low_stock")
+
+
+def test_generate_barcode_is_short_numeric_and_unique(shop):
+    db, sup, cust, prod = shop
+    seen = set()
+    for _ in range(200):
+        code = masters.generate_barcode(db)
+        assert code.isdigit() and 5 <= len(code) <= 10 and code[0] != "0" and code not in seen
+        seen.add(code)
+    assert len(masters.generate_barcode(db, 5)) == 5 and len(masters.generate_barcode(db, 99)) == 10
+    p = masters.add_product(db, "Cable", sale_price=100, purchase_price=50, category="Accessories",
+                            barcode=masters.generate_barcode(db))
+    q = masters.add_product(db, "Cable2", sale_price=100, purchase_price=50, category="Accessories",
+                            barcode=masters.generate_barcode(db))
+    a, b = (db.one("SELECT barcode FROM products WHERE id=?", (i,))["barcode"] for i in (p, q))
+    assert a != b                                                    # every product has its own barcode
+    assert masters.search_products(db, a)[0]["id"] == p              # a scanner finds it
+    with pytest.raises(BusinessError):
+        masters.update_product(db, q, barcode=a)                     # no sharing
+
+
+def test_a4_barcode_page_layout_and_page_count(shop, tmp_path):
+    from reportlab.lib.units import mm
+    from app.reports.labels_pdf import build_labels_pdf, grid_layout
+    db, sup, cust, prod = shop
+    for n in (1, 2, 6, 12, 21, 30, 40, 65, 84):
+        cols, rows, w, h = grid_layout(n)
+        assert cols * rows >= n and w >= 28 * mm and h >= 15 * mm and cols * w <= 210 * mm
+        assert rows * h <= 297 * mm
+    out = tmp_path / "bc.pdf"
+    build_labels_pdf(db, [(prod, 40)], out, "grid", per_page=12)               # 40 labels, 12 per page = 4 pages
+    assert out.read_bytes().count(b"/Type /Page\n") + out.read_bytes().count(b"/Type /Page ") >= 4
+    build_labels_pdf(db, [(prod, 3)], tmp_path / "roll.pdf", "roll")

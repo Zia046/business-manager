@@ -143,3 +143,10 @@ Agar customer (walk-in nahi) pehle bhi wahi product khareed chuka ho to Sale Inv
 ## Slogan aur Low Stock list
 - **Slogan:** Home par naam ke neeche wali line (pehle "Complete Business Management Solution") ab **Company Information Edit** mein **Slogan** ke khanay se badli ja sakti hai. Khali chhor dein to wo line nazar nahi aati.
 - **Low Stock:** Home ke neeche "Low-stock Items" wale khane par click karein to sirf wahi products ki list khulti hai jo khatam ho chuke hain (OUT OF STOCK) ya kam reh gaye hain (LOW STOCK). Khatam wale sab se upar, surkh rang mein. Is list mein cost ya purchase price nahi hoti, is liye staff bhi dekh sakta hai. Low-stock ki hadd har product mein "Low-stock level" se tay hoti hai.
+
+## Barcode: Generate, Scan, Print
+- **Generate Barcode:** Product ke Add/Edit form mein Barcode ke khanay ke saath **Generate Barcode** button hai. Ye 8 numbers ka chhota random barcode khud bana deta hai (kam az kam 5, zyada se zyada 10 numbers) jo kisi doosre product ke paas nahi hota, yani har product ka apna barcode. Purana barcode ho to badalne se pehle poochta hai. Barcode Save dabane par hi mehfooz hota hai.
+- **Scan / Read:** barcode scanner keyboard ki tarah kaam karta hai. Sale Invoice, Products aur Labels ke search khanay mein barcode scan karein, product khud mil jata hai (Sale Invoice mein Enter se add).
+- **Print Barcode:** Products window mein product chun kar **Print Barcode** dabayein. Agar us ka barcode nahi hai to wo bana kar pooch leta hai. Phir do tareeqay:
+  - **Barcode printer:** kitne barcode chahiye wo likhein, label printer par chhapte hain.
+  - **A4 page:** "ek page par kitne barcodes" aur "kitne pages" likhein. Software khud qataron aur columns ka hisaab laga kar page bana deta hai (jaise 21 per page = 3 x 7, 12 per page = 2 x 6).

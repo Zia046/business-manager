@@ -84,9 +84,9 @@ def print_repair_slip(db, repair_id: int) -> Path:
     return path
 
 
-def print_labels(db, items, layout: str) -> Path:
+def print_labels(db, items, layout: str, per_page=None) -> Path:
     from ..reports.labels_pdf import build_labels_pdf
     path = Path(db.data_dir) / "invoices" / "labels.pdf"
-    build_labels_pdf(db, items, path, layout)
+    build_labels_pdf(db, items, path, layout, per_page=per_page)
     deliver(db, path, thermal=(layout == "roll"))
     return path

@@ -109,6 +109,19 @@ def _barcode(db, code, product_id=None) -> str:
     return code
 
 
+def generate_barcode(db, length: int = 8) -> str:
+    """A new random numeric barcode (5 to 10 digits, default 8) that no product uses yet.
+    It never starts with 0 and is never 6 digits long by default, so it cannot be confused with a product ID label."""
+    import secrets
+    length = max(5, min(int(length), 10))
+    used = {r["barcode"] for r in db.query("SELECT barcode FROM products WHERE barcode IS NOT NULL")}
+    for _ in range(1000):
+        code = str(secrets.randbelow(9) + 1) + "".join(str(secrets.randbelow(10)) for _ in range(length - 1))
+        if code not in used:
+            return code
+    raise BusinessError("Could not find a free barcode, please try again")
+
+
 def barcode_for(product) -> str:
     """What is printed/scanned for a product: its own barcode, or its ID as 6 digits."""
     return product.get("barcode") or f"{product['id']:06d}"

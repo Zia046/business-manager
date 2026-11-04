@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QSpinBox, QFo
 
 from ..services import masters
 from ..services.common import BusinessError, is_owner
+from .barcode_print import BarcodePrintDialog, ensure_barcode
 from .widgets import make_table, money, selected_id, set_row
 
 
@@ -49,7 +50,7 @@ class ProductForm(QDialog):
         self.sale = _spin(p.get("sale_price", 0))
         self.opening = _spin(p.get("opening_stock", 0), 3)
         self.low = _spin(p.get("low_stock_level", 0), 3)
-        self.barcode = QLineEdit(p.get("barcode") or "", placeholderText="Optional - scan or type (letters/digits)")
+        self.barcode = QLineEdit(p.get("barcode") or "", placeholderText="Scan, type, or press Generate Barcode")
         self.warranty = QSpinBox()
         self.warranty.setRange(0, 120)
         self.warranty.setSuffix(" month(s)")
@@ -69,7 +70,15 @@ class ProductForm(QDialog):
         form.addRow("Opening Stock", self.opening)
         form.addRow("Low-stock alert at", self.low)
         form.addRow("Warranty on sale", self.warranty)
-        form.addRow("Barcode", self.barcode)
+        gen = QPushButton("Generate Barcode")
+        gen.setObjectName("secondary")
+        gen.setAutoDefault(False)
+        gen.setToolTip("Makes a new random number (8 digits) that no other product has")
+        gen.clicked.connect(self._generate_barcode)
+        brow = QHBoxLayout()
+        brow.addWidget(self.barcode, 1)
+        brow.addWidget(gen)
+        form.addRow("Barcode", brow)
         lay.addLayout(form)
         self.hint = QLabel("")
         self.hint.setObjectName("subtitle")
@@ -103,6 +112,16 @@ class ProductForm(QDialog):
             self.opening.setEnabled(self.product is None)
             self.hint.setText("")
 
+    def _generate_barcode(self):
+        if self.barcode.text().strip() and QMessageBox.question(
+                self, "Barcode", "This product already has a barcode. Replace it with a new one?\n"
+                "(Labels already printed with the old barcode will no longer match.)") != QMessageBox.Yes:
+            return
+        try:
+            self.barcode.setText(masters.generate_barcode(self.db))
+        except BusinessError as exc:
+            self.error.setText(str(exc))
+
     def save(self):
         try:
             cat = self.category.currentText() if self.category.currentData() is not None else ""
@@ -134,10 +153,11 @@ class ProductsWindow(QDialog):
         self.resize(1000, 600)
         lay = QVBoxLayout(self)
         top = QHBoxLayout()
-        self.search = QLineEdit(placeholderText="Search by name, #tag, ID or similar spelling...")
+        self.search = QLineEdit(placeholderText="Search by name, #tag, ID, similar spelling - or scan a barcode...")
         self.search.textChanged.connect(self.reload)
         top.addWidget(self.search)
         for text, fn, name in (("Add New", self.add, None), ("Edit", self.edit, "secondary"),
+                               ("Print Barcode", self.print_barcode, "secondary"),
                                ("Delete", self.delete, "secondary")):
             b = QPushButton(text)
             if name:
@@ -180,6 +200,15 @@ class ProductsWindow(QDialog):
     def edit(self, *_):
         p = self._selected()
         if p and ProductForm(self.db, p, self).exec():
+            self.reload()
+
+    def print_barcode(self):
+        p = self._selected()
+        if not p:
+            return
+        p = ensure_barcode(self.db, p, self)
+        if p:
+            BarcodePrintDialog(self.db, p, self).exec()
             self.reload()
 
     def delete(self):
