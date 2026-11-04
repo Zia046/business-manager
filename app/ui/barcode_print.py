@@ -4,7 +4,6 @@ import math
 from PySide6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QMessageBox, QPushButton,
                                QSpinBox, QVBoxLayout)
 
-from ..reports.labels_pdf import grid_layout
 from ..services import masters
 from ..services.common import BusinessError
 from .printing import print_labels
@@ -83,6 +82,7 @@ class BarcodePrintDialog(QDialog):
         for w in (self.count_row_label, self.count):
             w.setVisible(not a4)
         if a4:
+            from ..reports.labels_pdf import grid_layout
             cols, rows, w, h = grid_layout(self.per_page.value())
             self.info.setText(f"Each page: {cols} column(s) x {rows} row(s) = {cols * rows} places for "
                               f"{self.per_page.value()} barcode(s).  Total: {self.per_page.value() * self.pages.value()} "

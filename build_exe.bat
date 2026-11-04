@@ -16,6 +16,7 @@ pyinstaller --noconfirm --clean --onedir --windowed ^
   --icon assets\app.ico ^
   --hidden-import rapidfuzz ^
   --hidden-import arabic_reshaper ^
+  --collect-submodules reportlab.graphics.barcode ^
   --hidden-import bidi ^
   --hidden-import openpyxl ^
   main.py

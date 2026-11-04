@@ -5,7 +5,6 @@
 import math
 from pathlib import Path
 
-from reportlab.graphics.barcode import code128
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
@@ -47,6 +46,7 @@ def grid_layout(n: int, page=A4, margin=8 * mm):
 def _label(c, x, y, w, h, shop, product, price):
     reg, bold = _fonts()
     pad = 2.5 * mm
+    from reportlab.graphics.barcode import code128          # imported here: the program starts even if it is missing
     if h < 26 * mm:                                  # small label: name + price on one line, bars below
         code = barcode_for(product)
         pr = f"Rs. {price:,.0f}"
@@ -75,6 +75,7 @@ def _label(c, x, y, w, h, shop, product, price):
     c.drawCentredString(x + w / 2, y + h - 8.5 * mm, name)
     c.setFont(bold, 13)
     c.drawCentredString(x + w / 2, y + h - 14 * mm, f"Rs. {price:,.0f}")
+    from reportlab.graphics.barcode import code128
     code = barcode_for(product)
     bc = code128.Code128(code, barHeight=h - 24 * mm if h > 28 * mm else 8 * mm, barWidth=0.33 * mm,
                          humanReadable=False)

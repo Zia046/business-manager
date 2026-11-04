@@ -32,6 +32,7 @@ jobs:
           --name BusinessManager --icon assets/app.ico
           --hidden-import rapidfuzz --hidden-import arabic_reshaper
           --hidden-import bidi --hidden-import openpyxl
+          --collect-submodules reportlab.graphics.barcode
           main.py
 
       - name: Build the key generator (owner only)

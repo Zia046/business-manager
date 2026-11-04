@@ -1541,3 +1541,12 @@ def test_a4_barcode_page_layout_and_page_count(shop, tmp_path):
     build_labels_pdf(db, [(prod, 40)], out, "grid", per_page=12)               # 40 labels, 12 per page = 4 pages
     assert out.read_bytes().count(b"/Type /Page\n") + out.read_bytes().count(b"/Type /Page ") >= 4
     build_labels_pdf(db, [(prod, 3)], tmp_path / "roll.pdf", "roll")
+
+
+def test_installer_build_includes_reportlab_barcode_modules():
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parent.parent
+    assert "--collect-submodules reportlab.graphics.barcode" in (root / ".github/workflows/build.yml").read_text()
+    assert "--collect-submodules reportlab.graphics.barcode" in (root / "build_exe.bat").read_text()
+    src = (root / "app/ui/barcode_print.py").read_text() + (root / "app/reports/labels_pdf.py").read_text()
+    assert not any(l.startswith(("from reportlab.graphics", "import reportlab.graphics")) for l in src.splitlines())
