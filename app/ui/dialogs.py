@@ -32,9 +32,6 @@ class CompanyEditDialog(QDialog):
         form.addRow("Address", self.address)
         form.addRow("Phone Number", self.phone)
         form.addRow("Email", self.email)
-        self.slogan = QLineEdit(co.get("slogan") if co.get("slogan") is not None else "")
-        self.slogan.setPlaceholderText("Shown under the name on the home screen (can be left empty)")
-        form.addRow("Slogan", self.slogan)
 
         row = QHBoxLayout()
         self.preview = QLabel(alignment=Qt.AlignCenter)
@@ -76,7 +73,7 @@ class CompanyEditDialog(QDialog):
                 if src.resolve() != Path(logo_dest).resolve():
                     shutil.copyfile(src, logo_dest)
             masters.update_company(self.db, self.name.text(), self.address.text(),
-                                   self.phone.text(), self.email.text(), logo_dest, self.slogan.text())
+                                   self.phone.text(), self.email.text(), logo_dest)
         except BusinessError as exc:
             self.error.setText(str(exc))
             return

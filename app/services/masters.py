@@ -268,7 +268,7 @@ def get_company(db):
 
 
 @audited("Company information edited", lambda db,a,k,r: str(a[0]))
-def update_company(db, name, address, phone, email, logo_path=None, slogan=None):
+def update_company(db, name, address, phone, email, logo_path=None):
     if not all(x.strip() for x in (name, address, phone, email)):
         raise BusinessError("All company fields are required")
     with db.transaction() as c:
@@ -276,8 +276,6 @@ def update_company(db, name, address, phone, email, logo_path=None, slogan=None)
             c.execute("UPDATE company SET logo_path=? WHERE id=1", (logo_path,))
         c.execute("UPDATE company SET name=?,address=?,phone=?,email=? WHERE id=1",
                   (name.strip(), address.strip(), phone.strip(), email.strip()))
-        if slogan is not None:                       # may be empty: then no slogan line is shown
-            c.execute("UPDATE company SET slogan=? WHERE id=1", (slogan.strip(),))
     from .auth import write_branding  # keep login-screen branding in sync
     write_branding(db.data_dir, name.strip(), get_company(db)["logo_path"])
 

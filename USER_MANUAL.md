@@ -140,8 +140,7 @@ Product search wale khanay ke saath **Select from list** button (ya F6) hai. Is 
 ## Sale Invoice: pichla sold rate
 Agar customer (walk-in nahi) pehle bhi wahi product khareed chuka ho to Sale Invoice ke neeche, Profit/Loss ke niche peeli patti mein us product ka **previous sold rate** nazar aata hai (quantity, discount, tareekh aur bill number ke saath). Ye har product ke liye alag likha aata hai aur customer badalne par khud badal jata hai. Cancel kiye hue bills shamil nahi hote.
 
-## Slogan aur Low Stock list
-- **Slogan:** Home par naam ke neeche wali line (pehle "Complete Business Management Solution") ab **Company Information Edit** mein **Slogan** ke khanay se badli ja sakti hai. Khali chhor dein to wo line nazar nahi aati.
+## Low Stock list
 - **Low Stock:** Home ke neeche "Low-stock Items" wale khane par click karein to sirf wahi products ki list khulti hai jo khatam ho chuke hain (OUT OF STOCK) ya kam reh gaye hain (LOW STOCK). Khatam wale sab se upar, surkh rang mein. Is list mein cost ya purchase price nahi hoti, is liye staff bhi dekh sakta hai. Low-stock ki hadd har product mein "Low-stock level" se tay hoti hai.
 
 ## Barcode: Generate, Scan, Print

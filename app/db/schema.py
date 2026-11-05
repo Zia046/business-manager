@@ -54,8 +54,7 @@ CREATE TABLE company (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     name TEXT NOT NULL, address TEXT NOT NULL, phone TEXT NOT NULL,
     email TEXT NOT NULL, logo_path TEXT,
-    opening_cash REAL NOT NULL DEFAULT 0,
-    slogan TEXT NOT NULL DEFAULT 'Complete Business Management Solution'
+    opening_cash REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE users (
@@ -243,7 +242,6 @@ def migrate(conn):
                             ("users", "active", "INTEGER NOT NULL DEFAULT 1"),
                             ("products", "warranty_months", "INTEGER NOT NULL DEFAULT 0"),
                             ("products", "barcode", "TEXT"),
-                            ("company", "slogan", "TEXT NOT NULL DEFAULT 'Complete Business Management Solution'"),
                             ("invoice_items", "warranty_months", "INTEGER NOT NULL DEFAULT 0")):
         have = cols(table)
         if have and col not in have:              # (a table that does not exist at all is left alone)

@@ -184,11 +184,6 @@ class MainWindow(QMainWindow):
         self.name.setStyleSheet(f"font-size: 40px; font-weight: 800; color: {NAVY}; background: transparent;")
         self.name.setWordWrap(True)
         mid.addWidget(self.name)
-        self.tag = tag = QLabel("")
-        tag.setStyleSheet("background: #0d3b99; color: white; font-size: 18px; font-weight: 600; "
-                          "border-radius: 18px; padding: 6px 22px;")
-        tag.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-        mid.addWidget(tag)
         ticks = QLabel("<span style='color:#1b6ef3'>&#10004;</span> Sales &nbsp;&nbsp;&nbsp; "
                        "<span style='color:#1b6ef3'>&#10004;</span> Purchase &nbsp;&nbsp;&nbsp; "
                        "<span style='color:#1b6ef3'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
@@ -360,8 +355,6 @@ class MainWindow(QMainWindow):
         co = masters.get_company(self.db)
         self.setWindowTitle(co["name"])
         self.name.setText(co["name"])
-        self.tag.setText(co.get("slogan") or "")
-        self.tag.setVisible(bool(co.get("slogan")))
         self.slogan.setText("Grow Your Business with " + co["name"])
         if co["logo_path"] and Path(co["logo_path"]).exists():
             self.logo.setPixmap(QPixmap(co["logo_path"]).scaled(150, 150, Qt.KeepAspectRatio,
