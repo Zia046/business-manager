@@ -23,6 +23,44 @@ def whatsapp_url(phone, text) -> str:
     return f"https://wa.me/{normalize_phone(phone)}?text={quote(text)}"
 
 
+# ---- SMS reminders sent by the phone app (the PC only prepares the list; the phone sends from its own SIM) ----
+SMS_PLACEHOLDER = "xxxxxx"          # replaced by the customer's balance
+DEFAULT_SMS_TEMPLATE = """Burhan Nexus
+📞 0347-5093446
+محترم صارف،
+امید ہے آپ خیریت سے ہوں گے۔
+آپ کے لیجر کے مطابق ( xxxxxx) روپے کی رقم تاحال واجب الادا ہے۔
+براہِ کرم ہماری درخواست ہے کہ ادائیگی جلد از جلد ممکن بنائیں تاکہ حسابات بروقت کلیئر ہو سکیں۔
+Easypaisa ادائیگی کی تفصیل:
+نام: Ziaullah
+نمبر: 03139271732
+آپ کے اعتماد اور تعاون کا تہہ دل سے شکریہ"""
+
+
+def sms_text(template, amount) -> str:
+    """The message for one customer: every 'xxxxxx' becomes his balance, e.g. 12,500."""
+    return (template or DEFAULT_SMS_TEMPLATE).replace(SMS_PLACEHOLDER, f"{r2(amount):,.0f}")
+
+
+def mobile_export(db, template=None) -> dict:
+    """Everything the phone app needs: the customers who owe money (with a phone number) and their finished message."""
+    from datetime import datetime
+    from .reports import all_balances
+    template = template or DEFAULT_SMS_TEMPLATE
+    items, no_phone = [], 0
+    for r in all_balances(db, "customer")["rows"]:
+        if r["balance"] <= 0:
+            continue
+        phone = re.sub(r"[^\d+]", "", r["phone"] or "")
+        if not phone:
+            no_phone += 1
+            continue
+        items.append({"id": r["id"], "name": r["name"], "phone": phone, "amount": r["balance"],
+                      "message": sms_text(template, r["balance"])})
+    return {"app": "BusinessManagerReminders", "version": 1, "shop": _shop(db)[0],
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M"), "no_phone": no_phone, "items": items}
+
+
 def _shop(db):
     co = db.one("SELECT name, phone FROM company WHERE id=1")
     return co["name"], co["phone"]

@@ -10,3 +10,6 @@ license_private.key
 *.private.key
 keys_issued.csv
 installer_output/
+
+android/.gradle/
+android/local.properties

@@ -1542,3 +1542,23 @@ def test_installer_build_includes_reportlab_barcode_modules():
     assert "--collect-submodules reportlab.graphics.barcode" in (root / "build_exe.bat").read_text()
     src = (root / "app/ui/barcode_print.py").read_text() + (root / "app/reports/labels_pdf.py").read_text()
     assert not any(l.startswith(("from reportlab.graphics", "import reportlab.graphics")) for l in src.splitlines())
+
+
+def test_mobile_reminder_export_has_finished_messages(shop):
+    import json
+    from app.services import reminders
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 5, "price": 100}], paid=500)
+    cust = masters.add_party(db, "customer", "Bilal", phone="0347-5093446")
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 12500}], paid=0)
+    nophone = masters.add_party(db, "customer", "NoPhone")
+    trading.create_invoice(db, nophone, [{"product_id": prod, "qty": 1, "price": 100}], paid=0)
+    data = reminders.mobile_export(db)
+    assert data["version"] == 1 and data["no_phone"] == 1
+    owing = [i for i in data["items"] if i["id"] == cust]
+    assert len(owing) == 1
+    m = owing[0]["message"]
+    assert "12,500" in m and "xxxxxx" not in m and "Easypaisa" in m and owing[0]["amount"] == 12500
+    assert owing[0]["phone"] == "03475093446"
+    assert reminders.sms_text("Rs xxxxxx due xxxxxx", 1250.4) == "Rs 1,250 due 1,250"
+    json.dumps(data, ensure_ascii=False)                          # can be written as a file

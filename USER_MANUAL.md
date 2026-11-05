@@ -149,3 +149,11 @@ Agar customer (walk-in nahi) pehle bhi wahi product khareed chuka ho to Sale Inv
 - **Print Barcode:** Products window mein product chun kar **Print Barcode** dabayein. Agar us ka barcode nahi hai to wo bana kar pooch leta hai. Phir do tareeqay:
   - **Barcode printer:** kitne barcode chahiye wo likhein, label printer par chhapte hain.
   - **A4 page:** "ek page par kitne barcodes" aur "kitne pages" likhein. Software khud qataron aur columns ka hisaab laga kar page bana deta hai (jaise 21 per page = 3 x 7, 12 per page = 2 x 6).
+
+## Mobile App (SMS reminders) - "Burhan Reminder"
+Computer se customers ko baqaya ki SMS reminder phone ki apni SIM se bhejne ke liye.
+1. **PC par:** Reports > Outstanding / Baqayajat mein **SMS via Mobile App** dabayein. Apna message likhein (jahan raqam chahiye wahan **xxxxxx** likhein, computer har customer ki raqam khud laga dega) aur **Save Message & Export File** dabayein. `reminders.json` file banti hai.
+2. File phone par bhejein (WhatsApp, Bluetooth, USB ya Google Drive).
+3. **Phone par:** GitHub Actions se `BurhanReminder-apk` download karke install karein (pehli dafa "Install unknown apps" ki ijazat dein). App kholein: pehli dafa SMS ki ijazat maangti hai aur poochti hai **konsi SIM** se message jana hai (baad mein **Change SIM** se badal sakte hain).
+4. **Open reminders file** se file chunein. Har customer ke saamne **Send** dabane par message dikhta hai, Send dabayein to us SIM se SMS chala jata hai aur **Sent** likha aata hai. **Send to all not yet sent** sab ko ek ke baad ek bhejta hai.
+Note: Urdu SMS ek se zyada hisson mein jata hai, operator ke SMS charges lagte hain. Naye Android par agar SMS ki ijazat band ho to App info mein teen nuqton wale menu se "Allow restricted settings" dein.

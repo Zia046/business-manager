@@ -8,6 +8,7 @@ from .printing import print_invoice
 from .report_window import ReportWindow
 from .sale_invoice import SaleInvoiceDialog
 from .whatsapp import send_whatsapp
+from .mobile_reminders import MobileReminderDialog
 
 
 def _simple(builder, title, use_dates=True, filter_kind=None):
@@ -81,7 +82,8 @@ def open_outstanding(win):
             phone, text = reminders.balance_message(rw.db, pid)
             send_whatsapp(rw, phone, text)
     ReportWindow(win.db, B.outstanding_report, "Outstanding / Baqayajat", use_dates=False, parent=win,
-                 actions=[("WhatsApp Reminder", remind)]).exec()
+                 actions=[("WhatsApp Reminder", remind),
+                          ("SMS via Mobile App", lambda rw: MobileReminderDialog(rw.db, rw).exec())]).exec()
 
 
 def open_qist_due(win):
