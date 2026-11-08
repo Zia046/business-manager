@@ -48,7 +48,7 @@ class RegistrationDialog(QDialog):
         logo_row = QHBoxLayout()
         self.preview = QLabel("No logo", alignment=Qt.AlignCenter)
         self.preview.setFixedSize(96, 96)
-        self.preview.setStyleSheet("border: 1px dashed #e0c9bf; border-radius: 10px; color: #8a6f68;")
+        self.preview.setStyleSheet("border: 1px dashed #D9CABC; border-radius: 10px; color: #7B7068;")
         pick = QPushButton("Choose Logo (PNG/JPG)")
         pick.setObjectName("secondary")
         pick.clicked.connect(self.choose_logo)

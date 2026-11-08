@@ -183,7 +183,7 @@ class ProductsWindow(QDialog):
             low += is_low
             set_row(self.table, i, [r["id"], r["name"], r["category"], r["tags"], r["unit"],
                                     money(r["avg_cost"]), money(r["sale_price"]), f"{r['stock']:g}"],
-                    (5, 6, 7), QColor("#fdecea") if is_low else None)
+                    (5, 6, 7), QColor("#FFE3DF") if is_low else None)
         self.info.setText(f"{len(rows)} products     Low stock (red): {low}")
 
     def add(self):

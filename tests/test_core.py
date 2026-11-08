@@ -1562,3 +1562,16 @@ def test_mobile_reminder_export_has_finished_messages(shop):
     assert owing[0]["phone"] == "03475093446"
     assert reminders.sms_text("Rs xxxxxx due xxxxxx", 1250.4) == "Rs 1,250 due 1,250"
     json.dumps(data, ensure_ascii=False)                          # can be written as a file
+
+
+def test_dashboard_overview_and_recent_transactions(shop):
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 10, "price": 100}], paid=400)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 2, "price": 150}], paid=100)
+    o = reports.dashboard_overview(db)
+    assert o["month_sales"] == 300 and o["month_purchases"] == 1000
+    assert o["receivable"] == 200 and o["payable"] == 600
+    assert o["stock_units"] >= 8 and o["month_expenses"] == 0 and "month_profit" in o
+    rows = reports.recent_transactions(db)
+    assert {r["kind"] for r in rows} == {"Sale", "Purchase"} and rows[0]["amount"] in (300, 1000)
+    assert {r["kind"] for r in reports.recent_transactions(db, include_purchases=False)} == {"Sale"}

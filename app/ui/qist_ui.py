@@ -135,7 +135,7 @@ class ScheduleDialog(EnterSafeDialog):
             status = "Paid" if left <= 0.004 else ("LATE" if r["due_date"] < today else
                                                     ("Part paid" if r["paid"] else "Pending"))
             set_row(table, i, [r["seq"], r["due_date"], money(r["amount"]), money(r["paid"]), money(left), status],
-                    (2, 3, 4), QColor("#fdecea") if status == "LATE" else None)
+                    (2, 3, 4), QColor("#FFE3DF") if status == "LATE" else None)
         close = QPushButton("Close")
         close.clicked.connect(self.accept)
         lay.addWidget(close)
@@ -180,7 +180,7 @@ class QistWindow(EnterSafeDialog):
             late = p["status"] == "active" and p["next_due"] and p["next_due"] < today
             set_row(self.table, i, [p["id"], p["no"], p["customer"], p["invoice_no"] or "", money(p["principal"]),
                                     money(p["paid"]), money(left), p["next_due"] or "", STATUS[p["status"]]],
-                    (4, 5, 6), QColor("#fdecea") if late else None)
+                    (4, 5, 6), QColor("#FFE3DF") if late else None)
 
     def _plan(self):
         pid = selected_id(self.table)

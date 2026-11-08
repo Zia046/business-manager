@@ -1,69 +1,75 @@
-"""Shared look: glossy glass style in soft peach / blush / warm white / coral (colours only, nothing else changes)."""
-BG = "#fff5f0"          # warm white page background
-BG_DARK = "#fbe1d8"     # menu bar / table headers
-ACCENT = "#e07a67"      # coral
-ACCENT_DARK = "#cf5f4c"
-TEXT = "#3b2a28"
-MUTED = "#8a6f68"
-ERROR = "#d92d20"
-BORDER = "#efd2c7"
-WINE = "#5a2d2d"        # headings
+"""Shared look: flat, minimal, five-colour palette (warm ivory, coral red, mint green, soft yellow, charcoal)."""
+IVORY = "#F7EFE8"       # page background
+CORAL = "#FC6454"       # primary actions, selected items
+CORAL_DARK = "#E9503F"  # hover / pressed
+MINT = "#BAF5D9"        # success, profit
+YELLOW = "#F3E16B"      # warnings, pending, highlights
+CHARCOAL = "#282828"    # sidebar, headings, text
+CARD = "#FFFFFF"
+LINE = "#E8DDD2"        # thin borders
+LINE_DARK = "#D9CABC"
+MUTED = "#7B7068"
+ROW_ALT = "#FBF7F3"
+CORAL_TINT = "#FFE3DF"  # selected row / soft coral background
 
-# the 8 big home-screen buttons (the real colours are in main_window.CARD_COLORS)
-HOME_BTN_BG = "#fff1ec"
-HOME_BTN_BORDER = "#f3b9a8"
-HOME_BTN_HOVER = "#fddccf"
-HOME_BTN_TEXT = "#6d2f27"
+# names other modules already import
+BG = IVORY
+BG_DARK = "#EFE4DA"
+ACCENT = CORAL
+ACCENT_DARK = CORAL_DARK
+TEXT = CHARCOAL
+ERROR = "#D92D20"
+BORDER = LINE
+WINE = CHARCOAL
+HOME_BTN_BG, HOME_BTN_BORDER, HOME_BTN_HOVER, HOME_BTN_TEXT = CARD, LINE, "#FFF3F1", CHARCOAL
 
 STYLESHEET = f"""
-QWidget {{ background: {BG}; color: {TEXT}; font-family: 'Segoe UI', 'Noto Nastaliq Urdu', Arial; font-size: 14px; }}
-QDialog, QMainWindow {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #fffaf7,stop:0.6 #fff1ea,stop:1 #fde6dd); }}
+QWidget {{ background: {IVORY}; color: {CHARCOAL}; font-family: 'Segoe UI', 'Noto Nastaliq Urdu', Arial; font-size: 14px; }}
+QDialog, QMainWindow {{ background: {IVORY}; }}
 QLabel {{ background: transparent; }}
 QCheckBox, QRadioButton {{ background: transparent; }}
 QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QDoubleSpinBox, QSpinBox, QDateEdit {{
-    background: rgba(255,255,255,0.92); border: 1px solid {BORDER}; border-radius: 10px; padding: 6px 11px;
-    selection-background-color: #f9c9bb; selection-color: {TEXT}; }}
-QLineEdit:hover, QComboBox:hover, QDoubleSpinBox:hover, QSpinBox:hover, QDateEdit:hover {{ border: 1px solid #e6b3a4; }}
+    background: {CARD}; border: 1px solid {LINE_DARK}; border-radius: 10px; padding: 6px 11px;
+    selection-background-color: {CORAL_TINT}; selection-color: {CHARCOAL}; }}
+QLineEdit:hover, QComboBox:hover, QDoubleSpinBox:hover, QSpinBox:hover, QDateEdit:hover {{ border: 1px solid {MUTED}; }}
 QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus,
-QDateEdit:focus {{ border: 2px solid {ACCENT}; padding: 5px 10px; }}
-QComboBox QAbstractItemView {{ background: #ffffff; border: 1px solid {BORDER}; selection-background-color: #fbd9cf;
-    selection-color: {TEXT}; outline: none; }}
-QTableWidget, QTableView, QListWidget {{ background: rgba(255,255,255,0.92); border: 1px solid {BORDER}; border-radius: 12px;
-    gridline-color: #f6e6df; alternate-background-color: #fffaf7; selection-background-color: #fbd5c9;
-    selection-color: {TEXT}; }}
+QDateEdit:focus {{ border: 2px solid {CORAL}; padding: 5px 10px; }}
+QComboBox QAbstractItemView {{ background: {CARD}; border: 1px solid {LINE}; selection-background-color: {CORAL_TINT};
+    selection-color: {CHARCOAL}; outline: none; }}
+QTableWidget, QTableView, QListWidget {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 12px;
+    gridline-color: {LINE}; alternate-background-color: {ROW_ALT}; selection-background-color: {CORAL_TINT};
+    selection-color: {CHARCOAL}; }}
 QTableWidget::item, QTableView::item {{ padding: 4px 6px; }}
-QHeaderView::section {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #fdeee8,stop:1 #f9d9ce); color: {WINE};
-    font-weight: 700; padding: 7px 8px; border: none; border-right: 1px solid #f3d3c8; border-bottom: 1px solid {BORDER}; }}
+QHeaderView::section {{ background: {BG_DARK}; color: {CHARCOAL}; font-weight: 700; padding: 8px 8px; border: none;
+    border-right: 1px solid {LINE}; border-bottom: 1px solid {LINE_DARK}; }}
 QListWidget::item {{ padding: 5px 8px; border-radius: 6px; }}
-QListWidget::item:selected {{ background: #fbd5c9; color: {TEXT}; }}
-QPushButton {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #f4977f,stop:0.5 #e57b66,stop:1 #d96450); color: #fff;
-    border: 1px solid #cf5f4c; border-top: 1px solid #f9bdad; border-radius: 11px; padding: 8px 20px; font-weight: 600; }}
-QPushButton:hover {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #f7a690,stop:0.5 #ea8873,stop:1 #de6d59); }}
-QPushButton:pressed {{ background: #cf5f4c; border-top: 1px solid #cf5f4c; }}
-QPushButton:disabled {{ background: #f1c9bf; border: 1px solid #ebbcaf; color: #fff7f4; }}
-QPushButton:focus {{ border: 2px solid #f6a899; }}
-QPushButton#secondary {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #fbe3da); color: {WINE};
-    border: 1px solid #efc4b6; border-top: 1px solid #ffffff; }}
-QPushButton#secondary:hover {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #ffffff,stop:1 #f9d6ca); }}
-QPushButton#secondary:pressed {{ background: #f6cbbd; }}
-QLabel#title {{ font-size: 24px; font-weight: 700; letter-spacing: 1px; color: {WINE}; }}
+QListWidget::item:selected {{ background: {CORAL_TINT}; color: {CHARCOAL}; }}
+QPushButton {{ background: {CORAL}; color: #ffffff; border: none; border-radius: 10px; padding: 8px 20px; font-weight: 600; }}
+QPushButton:hover {{ background: {CORAL_DARK}; }}
+QPushButton:pressed {{ background: #D2432F; }}
+QPushButton:disabled {{ background: #F4B9B1; color: #ffffff; }}
+QPushButton:focus {{ border: 2px solid {CHARCOAL}; padding: 6px 18px; }}
+QPushButton#secondary {{ background: {CARD}; color: {CHARCOAL}; border: 1px solid {LINE_DARK}; }}
+QPushButton#secondary:hover {{ background: {BG_DARK}; }}
+QPushButton#secondary:pressed {{ background: {LINE}; }}
+QLabel#title {{ font-size: 24px; font-weight: 700; letter-spacing: 1px; color: {CHARCOAL}; }}
 QLabel#subtitle {{ color: {MUTED}; }}
 QLabel#error {{ color: {ERROR}; font-weight: 600; }}
 QScrollBar:vertical {{ background: transparent; width: 12px; margin: 2px; }}
-QScrollBar::handle:vertical {{ background: #f0c4b6; border-radius: 5px; min-height: 30px; }}
-QScrollBar::handle:vertical:hover {{ background: #e6a999; }}
+QScrollBar::handle:vertical {{ background: {LINE_DARK}; border-radius: 5px; min-height: 30px; }}
+QScrollBar::handle:vertical:hover {{ background: {MUTED}; }}
 QScrollBar:horizontal {{ background: transparent; height: 12px; margin: 2px; }}
-QScrollBar::handle:horizontal {{ background: #f0c4b6; border-radius: 5px; min-width: 30px; }}
-QScrollBar::handle:horizontal:hover {{ background: #e6a999; }}
+QScrollBar::handle:horizontal {{ background: {LINE_DARK}; border-radius: 5px; min-width: 30px; }}
+QScrollBar::handle:horizontal:hover {{ background: {MUTED}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
-QTabBar::tab {{ background: #fbe1d8; color: {WINE}; padding: 7px 16px; border-top-left-radius: 10px;
+QTabBar::tab {{ background: {BG_DARK}; color: {CHARCOAL}; padding: 7px 16px; border-top-left-radius: 10px;
     border-top-right-radius: 10px; margin-right: 2px; }}
-QTabBar::tab:selected {{ background: #ffffff; font-weight: 700; }}
+QTabBar::tab:selected {{ background: {CORAL}; color: #ffffff; font-weight: 700; }}
 QMenuBar {{ background: {BG_DARK}; }}
 QMenuBar::item {{ background: transparent; padding: 6px 12px; }}
-QMenuBar::item:selected {{ background: #f6c9bc; }}
-QMenu {{ background: #ffffff; border: 1px solid {BORDER}; border-radius: 8px; }}
+QMenuBar::item:selected {{ background: {CORAL_TINT}; }}
+QMenu {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 8px; }}
 QMenu::item {{ background: transparent; padding: 6px 28px; }}
-QMenu::item:selected {{ background: #fbd9cf; color: {TEXT}; }}
-QToolTip {{ background: #ffffff; color: {TEXT}; border: 1px solid {BORDER}; }}
+QMenu::item:selected {{ background: {CORAL_TINT}; color: {CHARCOAL}; }}
+QToolTip {{ background: {CHARCOAL}; color: #ffffff; border: none; padding: 4px 8px; }}
 """

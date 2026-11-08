@@ -142,7 +142,7 @@ class ReportWindow(QDialog):
                 if r in rep["bold_rows"]:
                     it.setFont(bold)
                 if r in rep.get("low_rows", ()):
-                    it.setBackground(QColor("#fdecea"))  # low stock
+                    it.setBackground(QColor("#FFE3DF"))  # low stock
                 t.setItem(r, c, it)
         t.resizeColumnsToContents()
         t.horizontalHeader().setStretchLastSection(True)

@@ -7,8 +7,8 @@ import time
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap, QShortcut
-from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QPushButton,
-                               QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QMenu,
+                               QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
 from ..config import DEVELOPER_EMAIL, DEVELOPER_NAME, DEVELOPER_PHONE
 from ..services import backup, masters, reports as R
@@ -17,34 +17,34 @@ from ..services import permissions
 from .dashboard import DashboardPage
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
-from .theme import BG, MUTED
+from .theme import (BG, BG_DARK, CARD, CHARCOAL, CORAL, CORAL_DARK, CORAL_TINT, IVORY, LINE, LINE_DARK, MINT, MUTED,
+                    YELLOW)
 from .widgets import add_shadow
 
 IDLE_SECONDS = 90          # after this long without use, the Dashboard is shown
 
-NAVY = "#5a2d2d"
-HOME_BG = "#fff3ec"
+NAVY = CHARCOAL
+HOME_BG = IVORY
 
 # (gradient top, gradient bottom, border, arrow colour) for each of the 8 home buttons, in order
-CARD_COLORS = [
-    ("#fff6f1", "#fdd9cc", "#f3b9a8", (224, 122, 103)),     # Sale Invoice      - peach
-    ("#fff4f4", "#fcd5d9", "#f1b0b9", (214, 104, 122)),     # Stock Purchase    - blush
-    ("#fff7ee", "#fde1c6", "#f2c79c", (222, 140, 84)),      # Cash Recovery     - apricot
-    ("#fff3f0", "#fbd0c8", "#efa99d", (218, 98, 86)),       # Stock Report      - coral
-    ("#fff5f6", "#fad8de", "#eeb2bd", (206, 94, 116)),      # Outstanding       - rose
-    ("#fff8f0", "#fce6cf", "#efcba6", (214, 132, 78)),      # Sale Summary      - champagne
-    ("#fff3ef", "#fbd3c9", "#f0ada0", (212, 96, 84)),       # Profit Loss       - salmon
-    ("#fdf3f4", "#f6d6dc", "#e6b0bd", (190, 92, 118)),      # Dashboard         - mauve rose
-]
+# (top, bottom, border, arrow colour): every home button looks the same - white card, thin border, coral arrow
+CARD_COLORS = [(CARD, CARD, LINE_DARK, (252, 100, 84))] * 8
 
 MENU_STYLE = f"""
-QMenuBar {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #e9806e,stop:1 #d9667a); color: white; padding: 4px 8px; }}
-QMenuBar::item {{ background: transparent; color: white; padding: 9px 18px; border-radius: 10px; font-weight: 600; }}
-QMenuBar::item:selected {{ background: rgba(255,255,255,0.28); }}
-QMenu {{ background: #ffffff; color: #3b2a28; border: 1px solid #efd2c7; }}
-QMenu::item {{ background: transparent; padding: 7px 30px; }}
-QMenu::item:selected {{ background: #fbd9cf; color: #3b2a28; }}
-QMenu::item:disabled {{ color: #b9a39b; }}
+QMenu {{ background: {CARD}; color: {CHARCOAL}; border: 1px solid {LINE_DARK}; border-radius: 10px; padding: 6px; }}
+QMenu::item {{ background: transparent; padding: 8px 30px 8px 16px; border-radius: 7px; }}
+QMenu::item:selected {{ background: {CORAL_TINT}; color: {CHARCOAL}; }}
+QMenu::item:disabled {{ color: #B3A89F; }}
+"""
+
+SIDEBAR_STYLE = f"""
+QFrame#sidebar {{ background: {CHARCOAL}; border: none; }}
+QFrame#sidebar QLabel {{ background: transparent; color: #ffffff; }}
+QFrame#sidebar QPushButton {{ background: transparent; color: #E9E4DF; text-align: left; border: none;
+    border-left: 4px solid transparent; border-radius: 0; padding: 11px 18px; font-size: 14px; font-weight: 600; }}
+QFrame#sidebar QPushButton:hover {{ background: #3A3A3A; color: #ffffff; }}
+QFrame#sidebar QPushButton[active="true"] {{ background: #343434; color: #ffffff; border-left: 4px solid {CORAL}; }}
+QFrame#sidebar QPushButton::menu-indicator {{ image: none; width: 0; }}
 """
 
 
@@ -65,13 +65,11 @@ class HomeCard(QPushButton):
         self.setMinimumHeight(118)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet(
-            f"QPushButton#card{index} {{ background: qlineargradient(x1:0,y1:0,x2:0.6,y2:1,stop:0 {top},stop:1 {bottom});"
-            f" border: 1px solid {border}; border-top: 2px solid rgba(255,255,255,0.95); border-radius: 22px; }}"
-            f"QPushButton#card{index}:hover {{ background: qlineargradient(x1:0,y1:0,x2:0.6,y2:1,stop:0 white,stop:1 {top});"
-            f" border: 2px solid {border}; border-top: 2px solid white; }}"
-            f"QPushButton#card{index}:pressed {{ background: {bottom}; }}"
-            f"QPushButton#card{index}:disabled {{ background: #f6e6df; border: 2px solid #e8d3ca; }}")
-        add_shadow(self)
+            f"QPushButton#card{index} {{ background: {CARD}; border: 1px solid {border}; border-radius: 14px; }}"
+            f"QPushButton#card{index}:hover {{ background: #FFF6F4; border: 1px solid {CORAL}; }}"
+            f"QPushButton#card{index}:pressed {{ background: {CORAL_TINT}; }}"
+            f"QPushButton#card{index}:disabled {{ background: #EFE8E1; border: 1px solid {LINE}; }}")
+        add_shadow(self, 14, 2, 22)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(18, 8, 14, 8)
         lay.setSpacing(12)
@@ -107,18 +105,24 @@ class MainWindow(QMainWindow):
         self.db = db
         self.user = user or {"login_id": "", "role": "owner", "name": ""}
         self.skip_exit_backup = False
-        self.setStyleSheet(f"QMainWindow, QWidget#home {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #fffaf7,stop:0.55 #fff0e8,stop:1 #fde3da); }}" + MENU_STYLE)
-        self._build_menu()
+        self.setStyleSheet(f"QMainWindow, QWidget#home {{ background: {IVORY}; }}" + MENU_STYLE)
+        self.menuBar().setVisible(False)          # navigation lives in the dark sidebar on the left
         QShortcut(QKeySequence("F2"), self, activated=lambda: open_module(self, "sale_invoice", "Sale Invoice"))
         QShortcut(QKeySequence("F5"), self, activated=self.show_dashboard)
         # pages: Home (7 buttons) and Dashboard; the developer line below them is always visible
         self.stack = QStackedWidget()
         container = QWidget(objectName="home")
-        cl = QVBoxLayout(container)
+        outer = QHBoxLayout(container)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self._build_sidebar())
+        right = QWidget(objectName="home")
+        cl = QVBoxLayout(right)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
         cl.addWidget(self.stack, 1)
         cl.addWidget(self._build_footer())
+        outer.addWidget(right, 1)
         self.setCentralWidget(container)
         self._build_home()
         self.dashboard = DashboardPage(self.db, self.user)
@@ -143,14 +147,40 @@ class MainWindow(QMainWindow):
         timer.start(1000)
         self.resize(1200, 740)
 
-    # ---------- menu bar ----------
-    def _build_menu(self):
-        bar = self.menuBar()
-        home = QAction("Home", self)
-        home.triggered.connect(lambda _=False: self.show_home())
-        bar.addAction(home)
+    # ---------- sidebar (same menu items, names and shortcuts as before) ----------
+    def _build_sidebar(self):
+        bar = QFrame(objectName="sidebar")
+        bar.setFixedWidth(232)
+        bar.setStyleSheet(SIDEBAR_STYLE)
+        lay = QVBoxLayout(bar)
+        lay.setContentsMargins(0, 18, 0, 12)
+        lay.setSpacing(2)
+        self.side_logo = QLabel(alignment=Qt.AlignCenter)
+        self.side_logo.setFixedHeight(84)
+        lay.addWidget(self.side_logo)
+        self.side_name = QLabel("", alignment=Qt.AlignCenter)
+        self.side_name.setWordWrap(True)
+        self.side_name.setStyleSheet("font-size: 17px; font-weight: 700; padding: 2px 12px 14px 12px;")
+        lay.addWidget(self.side_name)
+        self.nav = {}
+
+        def nav_button(text, handler, key):
+            b = QPushButton(text)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setFocusPolicy(Qt.NoFocus)
+            b.setProperty("active", False)
+            if handler:
+                b.clicked.connect(lambda _=False: handler())
+            lay.addWidget(b)
+            self.nav[key] = b
+            return b
+
+        nav_button("Dashboard", self.show_dashboard, "dashboard")
+        nav_button("Home", self.show_home, "home")
+        self.menus = []
         for title, items in MENUS:
-            menu = bar.addMenu(title)
+            btn = nav_button(title + "   \u25B8", None, title)
+            menu = QMenu(btn)
             for label, key in items:
                 act = QAction(label, self)
                 act.triggered.connect(lambda _=False, k=key, l=label: open_module(self, k, l))
@@ -158,7 +188,23 @@ class MainWindow(QMainWindow):
                     act.setEnabled(False)                      # staff: owner-only items are greyed out
                 if key in SHORTCUTS and title in ("Sale/Purchase", "Payments/Receipts"):
                     act.setShortcut(QKeySequence(SHORTCUTS[key]))
+                    self.addAction(act)                        # shortcuts keep working from every screen
                 menu.addAction(act)
+            btn.clicked.connect(lambda _=False, b=btn, m=menu: m.popup(b.mapToGlobal(b.rect().topRight())))
+            self.menus.append(menu)
+        lay.addStretch(1)
+        who = QLabel(f"{self.user.get('name') or self.user['login_id']}  ({self.user['role']})"
+                     if self.user["login_id"] else "")
+        who.setStyleSheet("color: #BDB5AE; font-size: 12px; padding: 6px 18px;")
+        lay.addWidget(who)
+        self._mark_nav("home")
+        return bar
+
+    def _mark_nav(self, key):
+        for k, b in self.nav.items():
+            b.setProperty("active", k == key)
+            b.style().unpolish(b)
+            b.style().polish(b)
 
     # ---------- home page ----------
     def _build_home(self):
@@ -171,8 +217,7 @@ class MainWindow(QMainWindow):
 
         # ---- banner: logo, company name, tagline, date and time ----
         banner = QFrame(objectName="banner")
-        banner.setStyleSheet("QFrame#banner { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-                             "stop:0 #fffaf7, stop:0.5 #fde9e0, stop:1 #f9cfc4); border: none; }")
+        banner.setStyleSheet(f"QFrame#banner {{ background: {CARD}; border: none; border-bottom: 1px solid {LINE}; }}")
         bl = QHBoxLayout(banner)
         bl.setContentsMargins(40, 16, 30, 16)
         bl.setSpacing(26)
@@ -186,18 +231,18 @@ class MainWindow(QMainWindow):
         self.name.setStyleSheet(f"font-size: 40px; font-weight: 800; color: {NAVY}; background: transparent;")
         self.name.setWordWrap(True)
         mid.addWidget(self.name)
-        ticks = QLabel("<span style='color:#e07a67'>&#10004;</span> Sales &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#e07a67'>&#10004;</span> Purchase &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#e07a67'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#e07a67'>&#10004;</span> Reports")
+        ticks = QLabel("<span style='color:#FC6454'>&#10004;</span> Sales &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#FC6454'>&#10004;</span> Purchase &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#FC6454'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#FC6454'>&#10004;</span> Reports")
         ticks.setStyleSheet(f"font-size: 16px; font-weight: 600; color: {NAVY}; background: transparent;")
         mid.addWidget(ticks)
         mid.addStretch()
         bl.addLayout(mid, 1)
         clock_card = QFrame()
-        clock_card.setStyleSheet("QFrame { background: rgba(255,255,255,0.78); border: 1px solid rgba(255,255,255,0.95); border-radius: 18px; }"
+        clock_card.setStyleSheet(f"QFrame {{ background: {IVORY}; border: 1px solid {LINE}; border-radius: 12px; }}"
                                  " QLabel { border: none; background: transparent; }")
-        add_shadow(clock_card, 22, 4, 50)
+        add_shadow(clock_card, 12, 2, 18)
         cc = QVBoxLayout(clock_card)
         cc.setContentsMargins(18, 10, 18, 10)
         self.date_lbl = QLabel(alignment=Qt.AlignCenter)
@@ -231,8 +276,8 @@ class MainWindow(QMainWindow):
 
         # ---- today at a glance ----
         strip = QFrame()
-        add_shadow(strip, 22, 4, 50)
-        strip.setStyleSheet("QFrame#strip { background: rgba(255,255,255,0.78); border: 1px solid rgba(255,255,255,0.95); border-radius: 22px; }")
+        add_shadow(strip, 14, 2, 20)
+        strip.setStyleSheet(f"QFrame#strip {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 14px; }}")
         strip.setObjectName("strip")
         sl = QHBoxLayout(strip)
         sl.setContentsMargins(14, 10, 14, 10)
@@ -248,7 +293,7 @@ class MainWindow(QMainWindow):
             if not first:
                 line = QFrame()
                 line.setFrameShape(QFrame.VLine)
-                line.setStyleSheet("color: #f0dcd3; background: #f0dcd3; max-width: 1px; border: none;")
+                line.setStyleSheet("color: #E8DDD2; background: #E8DDD2; max-width: 1px; border: none;")
                 sl.addWidget(line)
             first = False
             cell = ClickableFrame()
@@ -262,9 +307,9 @@ class MainWindow(QMainWindow):
             col = QVBoxLayout()
             col.setSpacing(0)
             t = QLabel(title)
-            t.setStyleSheet("color: #3b2a28; font-size: 13px; font-weight: 600;")
+            t.setStyleSheet("color: #7B7068; font-size: 13px; font-weight: 600;")
             v = QLabel("-")
-            v.setStyleSheet("font-size: 22px; font-weight: 800; color: #c8503f;")
+            v.setStyleSheet("font-size: 22px; font-weight: 800; color: #282828;")
             col.addWidget(t)
             col.addWidget(v)
             cl.addLayout(col)
@@ -285,14 +330,12 @@ class MainWindow(QMainWindow):
     def _build_footer(self):
         """Fixed developer band: plain labels (no input), so it can be neither edited nor deleted."""
         band = QFrame(objectName="footer")
-        band.setStyleSheet("QFrame#footer { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-                           "stop:0 #e9806e, stop:1 #d9667a); border: none; } QLabel { background: transparent; }")
+        band.setStyleSheet(f"QFrame#footer {{ background: {CHARCOAL}; border: none; }} QLabel {{ background: transparent; }}")
         band.setFocusPolicy(Qt.NoFocus)
         lay = QHBoxLayout(band)
         lay.setContentsMargins(36, 10, 30, 10)
         self.slogan = QLabel("Grow Your Business with " + DEVELOPER_NAME)
-        self.slogan.setStyleSheet("color: white; font-size: 24px; font-style: italic; font-family: 'Segoe Script', "
-                                  "'Segoe UI', Georgia;")
+        self.slogan.setStyleSheet("color: white; font-size: 20px; font-weight: 600;")
         lay.addWidget(self.slogan, 1)
         line = QFrame()
         line.setFrameShape(QFrame.VLine)
@@ -300,7 +343,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(line)
         dev = QVBoxLayout()
         dev.setSpacing(2)
-        d1 = QLabel(f"Developed by: <span style='color:#fff3c4;font-size:19px'><b>{DEVELOPER_NAME}</b></span>")
+        d1 = QLabel(f"Developed by: <span style='color:#F3E16B;font-size:19px'><b>{DEVELOPER_NAME}</b></span>")
         d1.setStyleSheet("color: white; font-size: 15px; font-weight: 600;")
         d2 = QLabel(f"Mobile: <b>{DEVELOPER_PHONE}</b> &nbsp;&nbsp;&nbsp; Email: <b>{DEVELOPER_EMAIL}</b>")
         d2.setStyleSheet("color: white; font-size: 14px;")
@@ -319,9 +362,11 @@ class MainWindow(QMainWindow):
     def show_dashboard(self):
         self.dashboard.refresh()
         self.stack.setCurrentWidget(self.dashboard)
+        self._mark_nav("dashboard")
 
     def show_home(self):
         self.stack.setCurrentWidget(self.home_page)
+        self._mark_nav("home")
 
     def eventFilter(self, obj, ev):
         if ev.type() in (QEvent.MouseMove, QEvent.MouseButtonPress, QEvent.KeyPress, QEvent.Wheel):
@@ -352,13 +397,18 @@ class MainWindow(QMainWindow):
             red = (key == "low_stock" and d["low_stock"] > 0) or (key == "qist_overdue" and d["qist_overdue"] > 0) \
                 or (key == "last_backup" and (hours is None or hours > 48))
             box.setText(vals[key])
-            box.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {'#c0392b' if red else '#c8503f'};")
+            box.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {'#D92D20' if red else '#282828'};")
 
     def refresh_header(self):
         """Reload company name (CAPITAL LETTERS) and logo, e.g. after Company Information Edit."""
         co = masters.get_company(self.db)
         self.setWindowTitle(co["name"])
         self.name.setText(co["name"])
+        self.side_name.setText(co["name"])
+        if co["logo_path"] and Path(co["logo_path"]).exists():
+            self.side_logo.setPixmap(QPixmap(co["logo_path"]).scaled(150, 76, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.side_logo.clear()
         self.slogan.setText("Grow Your Business with " + co["name"])
         if co["logo_path"] and Path(co["logo_path"]).exists():
             self.logo.setPixmap(QPixmap(co["logo_path"]).scaled(150, 150, Qt.KeepAspectRatio,

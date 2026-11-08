@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
 from .theme import ACCENT, BORDER, MUTED, TEXT
 
-GREEN, RED = QColor("#56a080"), QColor("#c43e50")
+GREEN, RED = QColor("#6ECDA0"), QColor("#D93C2D")
 
 
 def short(v: float) -> str:
@@ -147,7 +147,7 @@ def make_panel(title: str):
     """White rounded box with a bold title. Returns (frame, layout to add content to)."""
     frame = QFrame()
     frame.setObjectName("panel")
-    frame.setStyleSheet("QFrame#panel { background: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.95); border-radius: 16px; }"
+    frame.setStyleSheet("QFrame#panel { background: #FFFFFF; border: 1px solid #E8DDD2; border-radius: 14px; }"
                         "QFrame#panel QLabel { background: transparent; border: none; }")
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(14, 10, 14, 12)

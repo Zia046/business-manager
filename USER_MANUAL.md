@@ -158,5 +158,10 @@ Computer se customers ko baqaya ki SMS reminder phone ki apni SIM se bhejne ke l
 4. **Open reminders file** se file chunein. Har customer ke saamne **Send** dabane par message dikhta hai, Send dabayein to us SIM se SMS chala jata hai aur **Sent** likha aata hai. **Send to all not yet sent** sab ko ek ke baad ek bhejta hai.
 Note: Urdu SMS ek se zyada hisson mein jata hai, operator ke SMS charges lagte hain. Naye Android par agar SMS ki ijazat band ho to App info mein teen nuqton wale menu se "Allow restricted settings" dein.
 
-## Naya Glossy (peach / coral) look
-Poore program ka sirf **rang aur shakal** badli hai, koi feature, button, menu ya hisaab nahi badla. Garam safed/peach/blush pink background, coral chamakdar buttons, naram kinaron wale glass jaise cards aur halki parchhai, saaf table headers aur ek jaisi coral icons. Print hone wale bills/reports ke design mein koi tabdeeli nahi.
+## Naya Minimal look (Ivory, Coral, Mint, Yellow, Charcoal)
+Poore program ka sirf **rang aur shakal** badli hai, koi feature, hisaab ya data nahi badla.
+- **Rang:** warm ivory background, charcoal (gehra siyah) sidebar aur heading, coral buttons, mint (kamyabi, munafa) aur soft yellow (warning, baqaya, zaroori cheezein).
+- **Sidebar:** menu bar ki jagah baayen taraf gehra sidebar hai: Dashboard, Home aur wahi menus (New Account, Sale/Purchase, Payments/Receipts, Account Transactions, Reports, Utilities). Kisi par click karne par uske items khulte hain, naam aur shortcuts (F2, F5 wagaira) wahi hain. Jo page khula ho uske saath coral patti nazar aati hai.
+- **Dashboard:** Today's Revenue, Total Sales, Total Purchases, Net Profit, Total Expenses (ye sab is mahine ke), Customer Receivables, Supplier Payables, Available Stock, phir baqi pehle wale numbers (Cash in Hand, Profit This Year, Phones in Stock, Low-stock, Qist, Repairs, Backup). Neeche Sales & Profit Analytics ke graphs, Recent Transactions, Low Stock Alerts, Top Selling Products aur Qist ki list.
+- Staff ko purchases, profit, expenses, receivables, payables aur cash ke numbers nazar nahi aate.
+- Print hone wale bills/reports ka design nahi badla.

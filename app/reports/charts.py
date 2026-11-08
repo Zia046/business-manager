@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-BLUE, GREEN, RED = (224, 122, 103), (86, 160, 128), (196, 62, 80)       # coral, sage, deep rose
-INK, MUTED, GRID, PAPER = (59, 42, 40), (138, 111, 104), (243, 226, 218), (255, 252, 250)
+BLUE, GREEN, RED = (252, 100, 84), (110, 205, 160), (217, 60, 45)       # coral (bars), mint (profit), deeper coral (loss)
+INK, MUTED, GRID, PAPER = (40, 40, 40), (123, 112, 104), (232, 221, 210), (255, 255, 255)
 _FONTS = ["C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf",
           "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
 _BOLD = ["C:/Windows/Fonts/segoeuib.ttf", "C:/Windows/Fonts/arialbd.ttf",
@@ -130,7 +130,7 @@ def clock_image(hour, minute, second, size=180) -> Image.Image:
         d.line([(c - math.cos(a) * N * 0.05, c - math.sin(a) * N * 0.05),
                 (c + math.cos(a) * N * length, c + math.sin(a) * N * length)], fill=color, width=width)
     hand((hour % 12 + minute / 60) * 30, 0.25, 5 * s, INK)
-    hand((minute + second / 60) * 6, 0.35, 3 * s, BLUE)
+    hand((minute + second / 60) * 6, 0.35, 3 * s, INK)
     hand(second * 6, 0.40, s, RED)
     d.ellipse([c - 5 * s, c - 5 * s, c + 5 * s, c + 5 * s], fill=RED)
     return img.resize((size, size), Image.LANCZOS)

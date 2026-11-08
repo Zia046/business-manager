@@ -101,7 +101,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         # ---- customer row ----
         row = QHBoxLayout()
         no_lbl = QLabel(f"Invoice No: <b>{self.inv_no}</b>")
-        no_lbl.setStyleSheet("font-size: 14px; color: #e07a67; padding-right: 10px;")
+        no_lbl.setStyleSheet("font-size: 14px; color: #FC6454; padding-right: 10px;")
         self.no_lbl = no_lbl
         row.addWidget(no_lbl)
         row.addWidget(QLabel("Customer:"))
@@ -174,8 +174,8 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.prev_lbl = QLabel()                 # what this customer paid last time for the same products
         self.prev_lbl.setTextFormat(Qt.RichText)
         self.prev_lbl.setWordWrap(True)
-        self.prev_lbl.setStyleSheet("font-size: 13px; color: #3b2a28; background: #fff8e1; "
-                                    "border: 1px solid #f0d98a; border-radius: 8px; padding: 4px 8px;")
+        self.prev_lbl.setStyleSheet("font-size: 13px; color: #282828; background: #FBF3C4; "
+                                    "border: 1px solid #F3E16B; border-radius: 8px; padding: 4px 8px;")
         self.prev_lbl.hide()
         left.addWidget(self.prev_lbl)
         self.warn = QLabel()
@@ -191,7 +191,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.disc = _spin()
         self.disc.valueChanged.connect(self._totals_edited)
         self.total_lbl = QLabel("0.00")
-        self.total_lbl.setStyleSheet("font-size: 22px; font-weight: 800; color: #e07a67;")
+        self.total_lbl.setStyleSheet("font-size: 22px; font-weight: 800; color: #FC6454;")
         self.paid = _spin()
         self.paid.valueChanged.connect(self._paid_edited)
         self.balance_lbl = QLabel("0.00")
@@ -341,7 +341,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
                 if col >= C_STOCK:
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if col == C_QTY and ln["qty"] > ln["stock"]:
-                    it.setBackground(QColor("#fdecea"))  # more than available stock
+                    it.setBackground(QColor("#FFE3DF"))  # more than available stock
                 self.table.setItem(r, col, it)
             rm = QPushButton("Remove")
             rm.setObjectName("secondary")

@@ -6,11 +6,11 @@ from PySide6.QtWidgets import (QAbstractItemView, QGraphicsDropShadowEffect, QHe
 
 
 def add_shadow(widget, blur=28, dy=6, alpha=60):
-    """Soft warm shadow under a card (the glass look). Cheap: used only on a few big cards."""
+    """Very light shadow under a card. Cheap: used only on a few big cards."""
     fx = QGraphicsDropShadowEffect(widget)
     fx.setBlurRadius(blur)
     fx.setOffset(0, dy)
-    fx.setColor(QColor(190, 90, 70, alpha))
+    fx.setColor(QColor(40, 30, 20, alpha))
     widget.setGraphicsEffect(fx)
 
 
@@ -28,8 +28,6 @@ def make_table(headers, stretch_col=1) -> QTableWidget:
     t.verticalHeader().setVisible(False)
     t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
     t.horizontalHeader().setSectionResizeMode(stretch_col, QHeaderView.Stretch)
-    t.setStyleSheet("QTableWidget { alternate-background-color: #fffaf7; gridline-color: #f6e6df; }"
-                    "QHeaderView::section { background: #fdf1ec; padding: 8px; border: none; font-weight: 600; }")
     return t
 
 

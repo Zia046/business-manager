@@ -370,3 +370,29 @@ def dashboard_extras(db, today=None):
             "low_items": low, "qist_due": qist,
             "open_repairs": db.scalar("SELECT COUNT(*) FROM repairs WHERE status IN "
                                       "('received','in_progress','ready')")}
+
+
+def dashboard_overview(db, today=None):
+    """Read-only numbers for the Dashboard cards (this month): sales, purchases, expenses, net profit,
+    what customers owe, what is owed to suppliers and the stock on the shelf. Nothing is written."""
+    from datetime import date
+    today = today or date.today()
+    m0 = today.replace(day=1).isoformat() + _START
+    sales = db.scalar("SELECT COALESCE(SUM(total),0) FROM invoices WHERE status='active' AND date >= ?", (m0,))
+    purchases = db.scalar("SELECT COALESCE(SUM(total),0) FROM purchases WHERE status='active' AND date >= ?", (m0,))
+    pl = profit_loss(db, today.replace(day=1).isoformat(), today.isoformat())
+    stock = stock_position(db)
+    return {"month_sales": r2(sales), "month_purchases": r2(purchases), "month_expenses": pl["expenses"],
+            "month_profit": pl["net_profit"],
+            "receivable": all_balances(db, "customer")["total"], "payable": all_balances(db, "supplier")["total"],
+            "stock_units": sum(max(r["qty"], 0) for r in stock["rows"]), "stock_value": stock["total_value"]}
+
+
+def recent_transactions(db, limit=8, include_purchases=True):
+    """The latest bills (and purchases) for the Dashboard list."""
+    sale = ("SELECT i.date AS date, 'Sale' AS kind, i.no AS no, p.name AS party, i.total AS amount "
+            "FROM invoices i JOIN parties p ON p.id=i.party_id WHERE i.status='active'")
+    buy = ("SELECT u.date, 'Purchase', u.no, p.name, u.total FROM purchases u JOIN parties p ON p.id=u.party_id "
+           "WHERE u.status='active'")
+    sql = sale + (" UNION ALL " + buy if include_purchases else "") + " ORDER BY date DESC LIMIT ?"
+    return db.query(sql, (limit,))
