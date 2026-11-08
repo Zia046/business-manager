@@ -174,9 +174,19 @@ def _badge(color, symbol, size=48):
 
 
 BADGES = {"today_sales": ((46, 170, 70), "cart"), "cash": ((37, 99, 235), "wallet"),
-          "receivable": ((147, 70, 220), "people"), "low_stock": ((250, 140, 40), "box"),
+          "receivable": ((147, 70, 220), "people"), "low_stock": ((214, 96, 80), "box"),
           "phones_in_stock": ((60, 160, 60), "phone"), "qist_overdue": ((150, 50, 200), "warn"),
           "last_backup": ((40, 150, 230), "cloud")}
+
+
+def warm(img: Image.Image) -> Image.Image:
+    """One consistent look for every icon: the colours become a wine -> coral -> white scale (alpha kept)."""
+    from PIL import ImageOps
+    rgba = img.convert("RGBA")
+    tinted = ImageOps.colorize(rgba.convert("L"), black=(104, 38, 48), mid=(226, 118, 100), white=(255, 255, 255),
+                               blackpoint=20, whitepoint=235, midpoint=110).convert("RGBA")
+    tinted.putalpha(rgba.getchannel("A"))
+    return tinted
 
 
 def png(img: Image.Image) -> bytes:
@@ -186,12 +196,12 @@ def png(img: Image.Image) -> bytes:
 
 
 def home_icon_png(key: str, size=96) -> bytes:
-    return png(HOME_ICONS[key](size))
+    return png(warm(HOME_ICONS[key](size)))
 
 
 def badge_png(key: str, size=48) -> bytes:
     color, sym = BADGES[key]
-    return png(_badge(color, sym, size))
+    return png(warm(_badge(color, sym, size)))
 
 
 def arrow_png(color, size=40) -> bytes:

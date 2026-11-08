@@ -9,7 +9,7 @@ from .enter_safe import EnterSafeDialog
 from .widgets import make_table, set_row
 
 KINDS = [("Products", "products"), ("Customers", "customers"), ("Suppliers", "suppliers")]
-COLORS = {"new": QColor("#e6f7ec"), "skip": QColor("#f3f4f6"), "error": QColor("#fdecea")}
+COLORS = {"new": QColor("#e6f7ec"), "skip": QColor("#fdf1ec"), "error": QColor("#fdecea")}
 
 
 class ImportDialog(EnterSafeDialog):

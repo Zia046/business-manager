@@ -18,32 +18,33 @@ from .dashboard import DashboardPage
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
 from .theme import BG, MUTED
+from .widgets import add_shadow
 
 IDLE_SECONDS = 90          # after this long without use, the Dashboard is shown
 
-NAVY = "#0b2a6f"
-HOME_BG = "#eef4fc"
+NAVY = "#5a2d2d"
+HOME_BG = "#fff3ec"
 
 # (gradient top, gradient bottom, border, arrow colour) for each of the 8 home buttons, in order
 CARD_COLORS = [
-    ("#e3f0ff", "#c5dcfb", "#4f8fe8", (30, 90, 200)),       # Sale Invoice      - blue
-    ("#e6f9d6", "#c9efa9", "#6cc04a", (46, 150, 60)),       # Stock Purchase    - green
-    ("#f0e8ff", "#dccbff", "#9b7be0", (110, 60, 200)),      # Cash Recovery     - purple
-    ("#fff0dc", "#ffd7ab", "#f59e42", (220, 100, 20)),      # Stock Report      - orange
-    ("#dcf8fa", "#b6ecf3", "#3bb8d0", (20, 130, 160)),      # Outstanding       - cyan
-    ("#ffe6f1", "#ffc9e0", "#f06aa8", (190, 40, 110)),      # Sale Summary      - pink
-    ("#edfad8", "#d5f3ad", "#84cc16", (80, 140, 20)),       # Profit Loss       - lime
-    ("#e6e9ff", "#cbd1ff", "#6b74e8", (60, 60, 190)),       # Dashboard         - indigo
+    ("#fff6f1", "#fdd9cc", "#f3b9a8", (224, 122, 103)),     # Sale Invoice      - peach
+    ("#fff4f4", "#fcd5d9", "#f1b0b9", (214, 104, 122)),     # Stock Purchase    - blush
+    ("#fff7ee", "#fde1c6", "#f2c79c", (222, 140, 84)),      # Cash Recovery     - apricot
+    ("#fff3f0", "#fbd0c8", "#efa99d", (218, 98, 86)),       # Stock Report      - coral
+    ("#fff5f6", "#fad8de", "#eeb2bd", (206, 94, 116)),      # Outstanding       - rose
+    ("#fff8f0", "#fce6cf", "#efcba6", (214, 132, 78)),      # Sale Summary      - champagne
+    ("#fff3ef", "#fbd3c9", "#f0ada0", (212, 96, 84)),       # Profit Loss       - salmon
+    ("#fdf3f4", "#f6d6dc", "#e6b0bd", (190, 92, 118)),      # Dashboard         - mauve rose
 ]
 
 MENU_STYLE = f"""
-QMenuBar {{ background: #0d3b99; color: white; padding: 4px 8px; }}
-QMenuBar::item {{ background: transparent; color: white; padding: 9px 18px; border-radius: 8px; font-weight: 600; }}
-QMenuBar::item:selected {{ background: #2a63d4; }}
-QMenu {{ background: #ffffff; color: #1f2937; border: 1px solid #bcd0e6; }}
+QMenuBar {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #e9806e,stop:1 #d9667a); color: white; padding: 4px 8px; }}
+QMenuBar::item {{ background: transparent; color: white; padding: 9px 18px; border-radius: 10px; font-weight: 600; }}
+QMenuBar::item:selected {{ background: rgba(255,255,255,0.28); }}
+QMenu {{ background: #ffffff; color: #3b2a28; border: 1px solid #efd2c7; }}
 QMenu::item {{ background: transparent; padding: 7px 30px; }}
-QMenu::item:selected {{ background: #cfe1fb; color: #1f2937; }}
-QMenu::item:disabled {{ color: #9aa5b5; }}
+QMenu::item:selected {{ background: #fbd9cf; color: #3b2a28; }}
+QMenu::item:disabled {{ color: #b9a39b; }}
 """
 
 
@@ -64,12 +65,13 @@ class HomeCard(QPushButton):
         self.setMinimumHeight(118)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet(
-            f"QPushButton#card{index} {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 {top},stop:1 {bottom});"
-            f" border: 2px solid {border}; border-radius: 18px; }}"
-            f"QPushButton#card{index}:hover {{ background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 white,stop:1 {top});"
-            f" border: 3px solid {border}; }}"
+            f"QPushButton#card{index} {{ background: qlineargradient(x1:0,y1:0,x2:0.6,y2:1,stop:0 {top},stop:1 {bottom});"
+            f" border: 1px solid {border}; border-top: 2px solid rgba(255,255,255,0.95); border-radius: 22px; }}"
+            f"QPushButton#card{index}:hover {{ background: qlineargradient(x1:0,y1:0,x2:0.6,y2:1,stop:0 white,stop:1 {top});"
+            f" border: 2px solid {border}; border-top: 2px solid white; }}"
             f"QPushButton#card{index}:pressed {{ background: {bottom}; }}"
-            f"QPushButton#card{index}:disabled {{ background: #eceff3; border: 2px solid #cbd2dc; }}")
+            f"QPushButton#card{index}:disabled {{ background: #f6e6df; border: 2px solid #e8d3ca; }}")
+        add_shadow(self)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(18, 8, 14, 8)
         lay.setSpacing(12)
@@ -105,7 +107,7 @@ class MainWindow(QMainWindow):
         self.db = db
         self.user = user or {"login_id": "", "role": "owner", "name": ""}
         self.skip_exit_backup = False
-        self.setStyleSheet(f"QMainWindow, QWidget#home {{ background: {HOME_BG}; }}" + MENU_STYLE)
+        self.setStyleSheet(f"QMainWindow, QWidget#home {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #fffaf7,stop:0.55 #fff0e8,stop:1 #fde3da); }}" + MENU_STYLE)
         self._build_menu()
         QShortcut(QKeySequence("F2"), self, activated=lambda: open_module(self, "sale_invoice", "Sale Invoice"))
         QShortcut(QKeySequence("F5"), self, activated=self.show_dashboard)
@@ -170,7 +172,7 @@ class MainWindow(QMainWindow):
         # ---- banner: logo, company name, tagline, date and time ----
         banner = QFrame(objectName="banner")
         banner.setStyleSheet("QFrame#banner { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-                             "stop:0 #ffffff, stop:0.55 #eaf2ff, stop:1 #cfe0fb); border: none; }")
+                             "stop:0 #fffaf7, stop:0.5 #fde9e0, stop:1 #f9cfc4); border: none; }")
         bl = QHBoxLayout(banner)
         bl.setContentsMargins(40, 16, 30, 16)
         bl.setSpacing(26)
@@ -184,17 +186,18 @@ class MainWindow(QMainWindow):
         self.name.setStyleSheet(f"font-size: 40px; font-weight: 800; color: {NAVY}; background: transparent;")
         self.name.setWordWrap(True)
         mid.addWidget(self.name)
-        ticks = QLabel("<span style='color:#1b6ef3'>&#10004;</span> Sales &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#1b6ef3'>&#10004;</span> Purchase &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#1b6ef3'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#1b6ef3'>&#10004;</span> Reports")
+        ticks = QLabel("<span style='color:#e07a67'>&#10004;</span> Sales &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#e07a67'>&#10004;</span> Purchase &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#e07a67'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#e07a67'>&#10004;</span> Reports")
         ticks.setStyleSheet(f"font-size: 16px; font-weight: 600; color: {NAVY}; background: transparent;")
         mid.addWidget(ticks)
         mid.addStretch()
         bl.addLayout(mid, 1)
         clock_card = QFrame()
-        clock_card.setStyleSheet("QFrame { background: white; border: 1px solid #c9d6e8; border-radius: 14px; }"
+        clock_card.setStyleSheet("QFrame { background: rgba(255,255,255,0.78); border: 1px solid rgba(255,255,255,0.95); border-radius: 18px; }"
                                  " QLabel { border: none; background: transparent; }")
+        add_shadow(clock_card, 22, 4, 50)
         cc = QVBoxLayout(clock_card)
         cc.setContentsMargins(18, 10, 18, 10)
         self.date_lbl = QLabel(alignment=Qt.AlignCenter)
@@ -228,7 +231,8 @@ class MainWindow(QMainWindow):
 
         # ---- today at a glance ----
         strip = QFrame()
-        strip.setStyleSheet("QFrame#strip { background: white; border: 1px solid #c9d6e8; border-radius: 16px; }")
+        add_shadow(strip, 22, 4, 50)
+        strip.setStyleSheet("QFrame#strip { background: rgba(255,255,255,0.78); border: 1px solid rgba(255,255,255,0.95); border-radius: 22px; }")
         strip.setObjectName("strip")
         sl = QHBoxLayout(strip)
         sl.setContentsMargins(14, 10, 14, 10)
@@ -244,7 +248,7 @@ class MainWindow(QMainWindow):
             if not first:
                 line = QFrame()
                 line.setFrameShape(QFrame.VLine)
-                line.setStyleSheet("color: #d5deeb; background: #d5deeb; max-width: 1px; border: none;")
+                line.setStyleSheet("color: #f0dcd3; background: #f0dcd3; max-width: 1px; border: none;")
                 sl.addWidget(line)
             first = False
             cell = ClickableFrame()
@@ -258,9 +262,9 @@ class MainWindow(QMainWindow):
             col = QVBoxLayout()
             col.setSpacing(0)
             t = QLabel(title)
-            t.setStyleSheet("color: #1f2937; font-size: 13px; font-weight: 600;")
+            t.setStyleSheet("color: #3b2a28; font-size: 13px; font-weight: 600;")
             v = QLabel("-")
-            v.setStyleSheet("font-size: 22px; font-weight: 800; color: #1b4fd8;")
+            v.setStyleSheet("font-size: 22px; font-weight: 800; color: #c8503f;")
             col.addWidget(t)
             col.addWidget(v)
             cl.addLayout(col)
@@ -282,7 +286,7 @@ class MainWindow(QMainWindow):
         """Fixed developer band: plain labels (no input), so it can be neither edited nor deleted."""
         band = QFrame(objectName="footer")
         band.setStyleSheet("QFrame#footer { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-                           "stop:0 #0a2468, stop:1 #1647b8); border: none; } QLabel { background: transparent; }")
+                           "stop:0 #e9806e, stop:1 #d9667a); border: none; } QLabel { background: transparent; }")
         band.setFocusPolicy(Qt.NoFocus)
         lay = QHBoxLayout(band)
         lay.setContentsMargins(36, 10, 30, 10)
@@ -296,7 +300,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(line)
         dev = QVBoxLayout()
         dev.setSpacing(2)
-        d1 = QLabel(f"Developed by: <span style='color:#ffd84d;font-size:19px'><b>{DEVELOPER_NAME}</b></span>")
+        d1 = QLabel(f"Developed by: <span style='color:#fff3c4;font-size:19px'><b>{DEVELOPER_NAME}</b></span>")
         d1.setStyleSheet("color: white; font-size: 15px; font-weight: 600;")
         d2 = QLabel(f"Mobile: <b>{DEVELOPER_PHONE}</b> &nbsp;&nbsp;&nbsp; Email: <b>{DEVELOPER_EMAIL}</b>")
         d2.setStyleSheet("color: white; font-size: 14px;")
@@ -348,7 +352,7 @@ class MainWindow(QMainWindow):
             red = (key == "low_stock" and d["low_stock"] > 0) or (key == "qist_overdue" and d["qist_overdue"] > 0) \
                 or (key == "last_backup" and (hours is None or hours > 48))
             box.setText(vals[key])
-            box.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {'#c0392b' if red else '#1b4fd8'};")
+            box.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {'#c0392b' if red else '#c8503f'};")
 
     def refresh_header(self):
         """Reload company name (CAPITAL LETTERS) and logo, e.g. after Company Information Edit."""

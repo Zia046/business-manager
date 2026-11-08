@@ -45,7 +45,7 @@ class CashRecoveryDialog(EnterSafeDialog):
         root.addWidget(self.table, 1)
 
         self.balance = QLabel("Current balance: -")
-        self.balance.setStyleSheet("font-size: 20px; font-weight: 800; color: #1b6ef3;")
+        self.balance.setStyleSheet("font-size: 20px; font-weight: 800; color: #e07a67;")
         root.addWidget(self.balance)
 
         grid = QGridLayout()
@@ -106,7 +106,7 @@ class CashRecoveryDialog(EnterSafeDialog):
         rows = led["rows"]
         self.table.setRowCount(len(rows) + 1)
         set_row(self.table, 0, [since.strftime("%Y-%m-%d"), "Balance before this period", "", "",
-                                money(led["period_opening"])], (2, 3, 4), QColor("#eef2f7"))
+                                money(led["period_opening"])], (2, 3, 4), QColor("#fdf1ec"))
         for i, r in enumerate(rows, start=1):
             base = _LABELS.get(r["ref_type"], r["ref_type"])
             desc = f"{base}: {r['note']}" if r.get("note") else base

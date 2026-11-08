@@ -13,7 +13,7 @@ from ..services import backup, masters, reports as R
 from .theme import MUTED
 from .widgets import make_table, money, set_row
 
-CARD = "background: white; border: 1px solid #c9d6e8; border-radius: 10px; padding: 8px;"
+CARD = "background: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.95); border-radius: 16px; padding: 8px;"
 
 
 def _pix(png: bytes) -> QPixmap:
@@ -86,14 +86,14 @@ class DashboardPage(QScrollArea):
         sg.setSpacing(10)
         for i, kind in enumerate(("day", "week", "month", "year")):
             lab = QLabel()
-            lab.setStyleSheet("background: white; border: 1px solid #c9d6e8; border-radius: 10px;")
+            lab.setStyleSheet("background: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.95); border-radius: 16px;")
             sg.addWidget(lab, i // 2, i % 2)
             self.sales_labels[kind] = lab
         left.addLayout(sg)
         self.profit_label = None
         if self.owner:
             self.profit_label = QLabel()
-            self.profit_label.setStyleSheet("background: white; border: 1px solid #c9d6e8; border-radius: 10px;")
+            self.profit_label.setStyleSheet("background: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.95); border-radius: 16px;")
             left.addWidget(self.profit_label)
 
         # ---- lists ----
@@ -177,8 +177,8 @@ class DashboardPage(QScrollArea):
                "month_profit": x["month_profit"] < 0, "year_profit": x["year_profit"] < 0,
                "last_backup": self.owner and (hours is None or hours > 48)}
         for key, (box, title) in self.cards.items():
-            box.setText(f"<span style='color:#6b7280;font-size:12px'>{title}</span><br>"
-                        f"<span style='font-size:19px;font-weight:700;color:{'#c0392b' if bad.get(key) else '#1b6ef3'}'>"
+            box.setText(f"<span style='color:#8a6f68;font-size:12px'>{title}</span><br>"
+                        f"<span style='font-size:19px;font-weight:700;color:{'#c0392b' if bad.get(key) else '#e07a67'}'>"
                         f"{vals[key]}</span>")
         names = {"day": "Daily sales (last 14 days)", "week": "Weekly sales (last 8 weeks)",
                  "month": "Monthly sales (last 12 months)", "year": "Yearly sales"}

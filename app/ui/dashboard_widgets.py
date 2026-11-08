@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
 from .theme import ACCENT, BORDER, MUTED, TEXT
 
-GREEN, RED = QColor("#1e9e5a"), QColor("#d64541")
+GREEN, RED = QColor("#56a080"), QColor("#c43e50")
 
 
 def short(v: float) -> str:
@@ -73,7 +73,7 @@ class BarChart(QWidget):
         for i in range(5):                                   # grid lines with amounts on the left
             v = bot_v + span * i / 4
             yy = y(v)
-            p.setPen(QPen(QColor("#e5e9f0"), 1))
+            p.setPen(QPen(QColor("#f6e6df"), 1))
             p.drawLine(QPointF(plot.left(), yy), QPointF(plot.right(), yy))
             p.setPen(QColor(MUTED))
             p.drawText(QRectF(0, yy - 8, left - 6, 16), Qt.AlignRight | Qt.AlignVCenter, short(v))
@@ -111,7 +111,7 @@ class AnalogClock(QWidget):
         p.fillRect(self.rect(), QColor("white"))
         cx, cy = self.width() / 2, self.height() / 2
         r = min(self.width(), self.height()) / 2 - 6
-        p.setBrush(QColor("#f7faff"))
+        p.setBrush(QColor("#fffaf7"))
         p.setPen(QPen(QColor(ACCENT), 3))
         p.drawEllipse(QPointF(cx, cy), r, r)
 
@@ -147,7 +147,7 @@ def make_panel(title: str):
     """White rounded box with a bold title. Returns (frame, layout to add content to)."""
     frame = QFrame()
     frame.setObjectName("panel")
-    frame.setStyleSheet("QFrame#panel { background: white; border: 1px solid #c9d6e8; border-radius: 12px; }"
+    frame.setStyleSheet("QFrame#panel { background: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.95); border-radius: 16px; }"
                         "QFrame#panel QLabel { background: transparent; border: none; }")
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(14, 10, 14, 12)

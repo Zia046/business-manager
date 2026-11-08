@@ -157,3 +157,6 @@ Computer se customers ko baqaya ki SMS reminder phone ki apni SIM se bhejne ke l
 3. **Phone par:** GitHub Actions se `BurhanReminder-apk` download karke install karein (pehli dafa "Install unknown apps" ki ijazat dein). App kholein: pehli dafa SMS ki ijazat maangti hai aur poochti hai **konsi SIM** se message jana hai (baad mein **Change SIM** se badal sakte hain).
 4. **Open reminders file** se file chunein. Har customer ke saamne **Send** dabane par message dikhta hai, Send dabayein to us SIM se SMS chala jata hai aur **Sent** likha aata hai. **Send to all not yet sent** sab ko ek ke baad ek bhejta hai.
 Note: Urdu SMS ek se zyada hisson mein jata hai, operator ke SMS charges lagte hain. Naye Android par agar SMS ki ijazat band ho to App info mein teen nuqton wale menu se "Allow restricted settings" dein.
+
+## Naya Glossy (peach / coral) look
+Poore program ka sirf **rang aur shakal** badli hai, koi feature, button, menu ya hisaab nahi badla. Garam safed/peach/blush pink background, coral chamakdar buttons, naram kinaron wale glass jaise cards aur halki parchhai, saaf table headers aur ek jaisi coral icons. Print hone wale bills/reports ke design mein koi tabdeeli nahi.

@@ -79,7 +79,7 @@ class ReturnDialog(EnterSafeDialog):
         bottom.addLayout(left, 3)
         grid = QGridLayout()
         self.total_lbl = QLabel("0.00")
-        self.total_lbl.setStyleSheet("font-size: 26px; font-weight: 800; color: #1b6ef3;")
+        self.total_lbl.setStyleSheet("font-size: 26px; font-weight: 800; color: #e07a67;")
         self.cash = QDoubleSpinBox()
         self.cash.setRange(0, 1e9)
         self.cash.setDecimals(2)
