@@ -53,7 +53,7 @@ class MobileReminderDialog(QDialog):
                           + (f"  ({data['no_phone']} more have no phone number saved)." if data["no_phone"] else "."))
         t = self._template()
         if reminders.SMS_PLACEHOLDER not in t:
-            self.preview.setText("<span style='color:#c0392b'>The message must contain xxxxxx "
+            self.preview.setText("<span style='color:#DC2626'>The message must contain xxxxxx "
                                  "(it becomes the balance).</span>")
         else:
             n_chars = len(reminders.sms_text(t, 12500))

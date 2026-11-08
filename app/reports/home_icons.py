@@ -180,10 +180,10 @@ BADGES = {"today_sales": ((46, 170, 70), "cart"), "cash": ((37, 99, 235), "walle
 
 
 def warm(img: Image.Image) -> Image.Image:
-    """One consistent look for every icon: charcoal -> coral -> white scale (alpha kept)."""
+    """One consistent look for every icon: navy -> blue -> white scale (alpha kept)."""
     from PIL import ImageOps
     rgba = img.convert("RGBA")
-    tinted = ImageOps.colorize(rgba.convert("L"), black=(40, 40, 40), mid=(252, 100, 84), white=(255, 255, 255),
+    tinted = ImageOps.colorize(rgba.convert("L"), black=(30, 41, 59), mid=(37, 99, 235), white=(255, 255, 255),
                                blackpoint=20, whitepoint=235, midpoint=110).convert("RGBA")
     tinted.putalpha(rgba.getchannel("A"))
     return tinted

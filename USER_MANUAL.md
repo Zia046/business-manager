@@ -158,10 +158,9 @@ Computer se customers ko baqaya ki SMS reminder phone ki apni SIM se bhejne ke l
 4. **Open reminders file** se file chunein. Har customer ke saamne **Send** dabane par message dikhta hai, Send dabayein to us SIM se SMS chala jata hai aur **Sent** likha aata hai. **Send to all not yet sent** sab ko ek ke baad ek bhejta hai.
 Note: Urdu SMS ek se zyada hisson mein jata hai, operator ke SMS charges lagte hain. Naye Android par agar SMS ki ijazat band ho to App info mein teen nuqton wale menu se "Allow restricted settings" dein.
 
-## Naya Minimal look (Ivory, Coral, Mint, Yellow, Charcoal)
-Poore program ka sirf **rang aur shakal** badli hai, koi feature, hisaab ya data nahi badla.
-- **Rang:** warm ivory background, charcoal (gehra siyah) sidebar aur heading, coral buttons, mint (kamyabi, munafa) aur soft yellow (warning, baqaya, zaroori cheezein).
-- **Sidebar:** menu bar ki jagah baayen taraf gehra sidebar hai: Dashboard, Home aur wahi menus (New Account, Sale/Purchase, Payments/Receipts, Account Transactions, Reports, Utilities). Kisi par click karne par uske items khulte hain, naam aur shortcuts (F2, F5 wagaira) wahi hain. Jo page khula ho uske saath coral patti nazar aati hai.
-- **Dashboard:** Today's Revenue, Total Sales, Total Purchases, Net Profit, Total Expenses (ye sab is mahine ke), Customer Receivables, Supplier Payables, Available Stock, phir baqi pehle wale numbers (Cash in Hand, Profit This Year, Phones in Stock, Low-stock, Qist, Repairs, Backup). Neeche Sales & Profit Analytics ke graphs, Recent Transactions, Low Stock Alerts, Top Selling Products aur Qist ki list.
-- Staff ko purchases, profit, expenses, receivables, payables aur cash ke numbers nazar nahi aate.
+## Professional Blue look, toolbar aur screen ke mutabiq windows
+- **Rang:** saaf halka-grey background, safed cards, gehra neela (navy) toolbar aur footer, neele buttons. Success/munafa hara, warning/baqaya peela, nuqsaan surkh. Koi gradient ya design pattern nahi, sab flat aur saaf.
+- **Toolbar:** sidebar hata kar upar wapas toolbar hai: Home, New Account, Sale/Purchase, Payments/Receipts, Account Transactions, Reports, Utilities (naam aur shortcuts wahi). Dashboard Home ke 8 buttons mein se ek hai aur F5 se bhi khulta hai.
+- **Windows ka size:** main window screen ke mutabiq khulti hai, aur har dialog/window screen se bari nahi khulti (zyada se zyada screen ka 92%) aur screen ke andar hi rehti hai. Chhoti screen par Home page scroll hota hai.
+- **Dashboard:** Today's Revenue, Total Sales, Total Purchases, Net Profit, Total Expenses (is mahine ke), Receivables, Payables, Available Stock, baqi numbers, graphs, Recent Transactions, Low Stock Alerts, Top Selling aur Qist list. Staff ko cost/profit/cash ke numbers nazar nahi aate.
 - Print hone wale bills/reports ka design nahi badla.

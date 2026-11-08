@@ -99,7 +99,7 @@ class PurchaseImeiDialog(QDialog):
             self.status.setStyleSheet("")
             self.status.setText(f"{n} phone(s) - quantity will be {n}")
         except BusinessError as exc:
-            self.status.setStyleSheet("color: #d92d20; font-weight: 600;")
+            self.status.setStyleSheet("color: #DC2626; font-weight: 600;")
             self.status.setText(str(exc))
 
     def _accept(self):
@@ -110,7 +110,7 @@ class PurchaseImeiDialog(QDialog):
             if self.checker:
                 self.checker(units)
         except BusinessError as exc:
-            self.status.setStyleSheet("color: #d92d20; font-weight: 600;")
+            self.status.setStyleSheet("color: #DC2626; font-weight: 600;")
             self.status.setText(str(exc))
             return
         self.value = units

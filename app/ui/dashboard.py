@@ -10,12 +10,12 @@ from PySide6.QtWidgets import (QCalendarWidget, QFrame, QGridLayout, QHBoxLayout
 
 from ..reports import charts, home_icons
 from ..services import backup, masters, reports as R
-from .theme import CARD, CHARCOAL, IVORY, LINE, MINT, MUTED, YELLOW
+from .theme import LINE, MUTED, SUCCESS_BG, SUCCESS_TEXT, SURFACE, TEXT, WARN_BG, WARN_TEXT
 from .widgets import make_table, money, set_row
 
-PANEL = f"background: {CARD}; border: 1px solid {LINE}; border-radius: 14px;"
-PILL = {"mint": f"background: {MINT}; color: {CHARCOAL}; border-radius: 9px; padding: 2px 10px; font-size: 11px; font-weight: 700;",
-        "yellow": f"background: {YELLOW}; color: {CHARCOAL}; border-radius: 9px; padding: 2px 10px; font-size: 11px; font-weight: 700;"}
+PANEL = f"background: {SURFACE}; border: 1px solid {LINE}; border-radius: 14px;"
+PILL = {"mint": f"background: {SUCCESS_BG}; color: {SUCCESS_TEXT}; border-radius: 9px; padding: 2px 10px; font-size: 11px; font-weight: 700;",
+        "yellow": f"background: {WARN_BG}; color: {WARN_TEXT}; border-radius: 9px; padding: 2px 10px; font-size: 11px; font-weight: 700;"}
 # which small picture each card uses (pictures come from the shared icon set)
 ICON = {"today_sales": "today_sales", "month_sales": "today_sales", "month_purchases": "low_stock",
         "month_profit": "cash", "month_expenses": "cash", "receivable": "receivable", "payable": "receivable",
@@ -52,7 +52,7 @@ class StatCard(QFrame):
         top.addWidget(t, 1)
         lay.addLayout(top)
         self.value = QLabel("-")
-        self.value.setStyleSheet(f"color: {CHARCOAL}; font-size: {20 if compact else 27}px; font-weight: 800;")
+        self.value.setStyleSheet(f"color: {TEXT}; font-size: {20 if compact else 27}px; font-weight: 800;")
         lay.addWidget(self.value)
         self.pill = QLabel()
         self.pill.hide()
@@ -290,7 +290,7 @@ class DashboardPage(QScrollArea):
                                                               size=(380, 240)))))
         if self.profit_label is not None:
             self.profit_label.setPixmap(_pix(charts.to_png(charts.bar_chart(
-                R.profit_series(self.db), "Profit / Loss per month (mint = profit, coral = loss)", size=(790, 250),
+                R.profit_series(self.db), "Profit / Loss per month (green = profit, red = loss)", size=(790, 250),
                 signed=True))))
         recent = R.recent_transactions(self.db, 8, include_purchases=self.owner)
         self._fill(self.recent_t, [[r["date"][:10], r["kind"], r["no"], r["party"], money(r["amount"])]

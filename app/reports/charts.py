@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-BLUE, GREEN, RED = (252, 100, 84), (110, 205, 160), (217, 60, 45)       # coral (bars), mint (profit), deeper coral (loss)
-INK, MUTED, GRID, PAPER = (40, 40, 40), (123, 112, 104), (232, 221, 210), (255, 255, 255)
+BLUE, GREEN, RED = (37, 99, 235), (34, 160, 90), (220, 38, 38)          # blue (bars), green (profit), red (loss)
+INK, MUTED, GRID, PAPER = (31, 41, 55), (100, 116, 139), (226, 232, 240), (255, 255, 255)
 _FONTS = ["C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/arial.ttf",
           "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
 _BOLD = ["C:/Windows/Fonts/segoeuib.ttf", "C:/Windows/Fonts/arialbd.ttf",

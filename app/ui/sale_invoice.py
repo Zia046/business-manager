@@ -101,7 +101,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         # ---- customer row ----
         row = QHBoxLayout()
         no_lbl = QLabel(f"Invoice No: <b>{self.inv_no}</b>")
-        no_lbl.setStyleSheet("font-size: 14px; color: #FC6454; padding-right: 10px;")
+        no_lbl.setStyleSheet("font-size: 14px; color: #2563EB; padding-right: 10px;")
         self.no_lbl = no_lbl
         row.addWidget(no_lbl)
         row.addWidget(QLabel("Customer:"))
@@ -174,8 +174,8 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.prev_lbl = QLabel()                 # what this customer paid last time for the same products
         self.prev_lbl.setTextFormat(Qt.RichText)
         self.prev_lbl.setWordWrap(True)
-        self.prev_lbl.setStyleSheet("font-size: 13px; color: #282828; background: #FBF3C4; "
-                                    "border: 1px solid #F3E16B; border-radius: 8px; padding: 4px 8px;")
+        self.prev_lbl.setStyleSheet("font-size: 13px; color: #1F2937; background: #FEF3C7; "
+                                    "border: 1px solid #FDE68A; border-radius: 8px; padding: 4px 8px;")
         self.prev_lbl.hide()
         left.addWidget(self.prev_lbl)
         self.warn = QLabel()
@@ -191,7 +191,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.disc = _spin()
         self.disc.valueChanged.connect(self._totals_edited)
         self.total_lbl = QLabel("0.00")
-        self.total_lbl.setStyleSheet("font-size: 22px; font-weight: 800; color: #FC6454;")
+        self.total_lbl.setStyleSheet("font-size: 22px; font-weight: 800; color: #2563EB;")
         self.paid = _spin()
         self.paid.valueChanged.connect(self._paid_edited)
         self.balance_lbl = QLabel("0.00")
@@ -341,7 +341,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
                 if col >= C_STOCK:
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if col == C_QTY and ln["qty"] > ln["stock"]:
-                    it.setBackground(QColor("#FFE3DF"))  # more than available stock
+                    it.setBackground(QColor("#FEE2E2"))  # more than available stock
                 self.table.setItem(r, col, it)
             rm = QPushButton("Remove")
             rm.setObjectName("secondary")
@@ -441,7 +441,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.profit_lbl.setVisible(self.show_profit.isChecked())
         self.profit_lbl.setText(("Profit: " if profit >= 0 else "Loss: ") + money(abs(profit)))
         self.profit_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: "
-                                      + ("#12803c" if profit >= 0 else "#d92d20"))
+                                      + ("#16A34A" if profit >= 0 else "#DC2626"))
         self._show_previous_rates()
         over = [ln for ln in d.over_stock() if not ln["track_serial"]]
         self.warn.setText("Not enough stock: " + ", ".join(f"{ln['name']} (have {ln['stock']:g})"

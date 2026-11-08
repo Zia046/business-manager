@@ -16,7 +16,7 @@ class ResetDialog(EnterSafeDialog):
         self.setMinimumWidth(560)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
-        warn = QLabel("<b style='color:#c0392b'>Warning:</b> erased data cannot be brought back, except from "
+        warn = QLabel("<b style='color:#DC2626'>Warning:</b> erased data cannot be brought back, except from "
                       "the safety backup that is made automatically just before the reset.")
         warn.setWordWrap(True)
         lay.addWidget(warn)
@@ -45,7 +45,7 @@ class ResetDialog(EnterSafeDialog):
         lay.addWidget(self.error)
         go = QPushButton("Erase Selected Data")
         go.setObjectName("danger")
-        go.setStyleSheet("background:#c0392b; color:white; font-weight:700; padding:8px;")
+        go.setStyleSheet("background:#DC2626; color:white; font-weight:700; padding:8px;")
         go.clicked.connect(self.run)
         cancel = QPushButton("Cancel")
         cancel.setObjectName("secondary")

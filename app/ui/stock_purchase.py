@@ -91,7 +91,7 @@ class StockPurchaseDialog(EnterSafeDialog):
         bottom.addLayout(left, 3)
         grid = QGridLayout()
         self.total_lbl = QLabel("0.00")
-        self.total_lbl.setStyleSheet("font-size: 28px; font-weight: 800; color: #FC6454;")
+        self.total_lbl.setStyleSheet("font-size: 28px; font-weight: 800; color: #2563EB;")
         self.paid = QDoubleSpinBox()
         self.paid.setRange(0, 1e9)
         self.paid.setDecimals(2)
@@ -196,9 +196,9 @@ class StockPurchaseDialog(EnterSafeDialog):
                 if col >= C_STOCK:
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if col == C_PRICE and ln["price"] is None:
-                    it.setBackground(QColor("#FAF0A8"))  # price still to be typed
+                    it.setBackground(QColor("#FEF3C7"))  # price still to be typed
                 elif col == C_PRICE and ln.get("price_saved") and ln["price"] == ln.get("price_start"):
-                    it.setBackground(QColor("#BAF5D9"))  # filled from the saved purchase price (can be changed)
+                    it.setBackground(QColor("#DCFCE7"))  # filled from the saved purchase price (can be changed)
                 self.table.setItem(r, col, it)
             rm = QPushButton("Remove")
             rm.setObjectName("secondary")

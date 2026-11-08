@@ -64,7 +64,7 @@ class ProductPickerDialog(QDialog):
                 if c >= 3:
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if c == 3 and p["stock"] <= 0:
-                    it.setForeground(QColor("#c0392b"))              # out of stock
+                    it.setForeground(QColor("#DC2626"))              # out of stock
                 if c == 1:
                     it.setData(Qt.UserRole, p)
                 self.table.setItem(r, c, it)

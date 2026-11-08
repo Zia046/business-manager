@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from app.config import APP_NAME, resolve_data_dir
 from app.services import auth, licensing
 from app.ui.activation import ActivationDialog
+from app.ui.fit_screen import FitToScreen
 from app.ui.login import LoginDialog
 from app.ui.main_window import MainWindow
 from app.ui.registration import RegistrationDialog
@@ -40,6 +41,8 @@ def run() -> int:
     app.setApplicationName(APP_NAME)
     _install_crash_logger()
     app.setStyleSheet(STYLESHEET)
+    fit = FitToScreen(app)                      # windows never open taller/wider than the screen
+    app.installEventFilter(fit)
 
     data_dir, used_fallback = resolve_data_dir()
     if used_fallback and not auth.is_registered(data_dir):

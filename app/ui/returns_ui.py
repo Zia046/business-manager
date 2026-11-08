@@ -79,7 +79,7 @@ class ReturnDialog(EnterSafeDialog):
         bottom.addLayout(left, 3)
         grid = QGridLayout()
         self.total_lbl = QLabel("0.00")
-        self.total_lbl.setStyleSheet("font-size: 26px; font-weight: 800; color: #FC6454;")
+        self.total_lbl.setStyleSheet("font-size: 26px; font-weight: 800; color: #2563EB;")
         self.cash = QDoubleSpinBox()
         self.cash.setRange(0, 1e9)
         self.cash.setDecimals(2)
@@ -172,7 +172,7 @@ class ReturnDialog(EnterSafeDialog):
                 if col >= C_DOC:
                     it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if col == C_PRICE and ln["price"] is None:
-                    it.setBackground(QColor("#FAF0A8"))
+                    it.setBackground(QColor("#FEF3C7"))
                 self.table.setItem(r, col, it)
         self._loading = False
         self._recalc()

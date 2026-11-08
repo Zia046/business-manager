@@ -195,7 +195,7 @@ class RepairsWindow(EnterSafeDialog):
                                     j["device"], j["problem"] or "", money(j["estimate"]), money(j["charges"]),
                                     money(j["received"]), money(j["due"]) if j["due"] else "",
                                     repairs.STATUS_LABEL[j["status"]]],
-                    (7, 8, 9, 10), QColor("#BAF5D9") if ready else (QColor("#FFE3DF") if j["due"] else None))
+                    (7, 8, 9, 10), QColor("#DCFCE7") if ready else (QColor("#FEE2E2") if j["due"] else None))
         open_n = sum(1 for j in self.jobs if j["status"] in repairs.OPEN)
         self.info.setText(f"{len(self.jobs)} jobs shown   |   open: {open_n}   |   "
                           f"money still to receive: {money(sum(j['due'] for j in self.jobs))}")
