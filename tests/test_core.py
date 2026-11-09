@@ -1587,3 +1587,12 @@ def test_table_cell_editors_have_no_big_padding():
     for sel in ("QAbstractItemView QLineEdit", "QAbstractItemView QDoubleSpinBox:focus", "QAbstractItemView QLineEdit:focus"):
         assert sel in css                                         # incl. :focus, which would otherwise win over the override
     assert "padding: 0px 4px; margin: 0px; min-height: 0px" in css
+
+
+def test_columns_for_fits_width():
+    from app.ui.layout_math import columns_for
+    assert columns_for(1800, 250, 20, 4, (4, 2, 1)) == 4
+    assert columns_for(1000, 250, 20, 4, (4, 2, 1)) == 2      # 3 would leave a lonely button -> 2
+    assert columns_for(400, 250, 20, 4, (4, 2, 1)) == 1
+    assert columns_for(100, 250) == 1
+    assert columns_for(900, 205) == 4

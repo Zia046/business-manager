@@ -15,8 +15,10 @@ from ..services import backup, masters, reports as R
 from ..reports import home_icons
 from ..services import permissions
 from .dashboard import DashboardPage
+from .layout_math import columns_for
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
+from .responsive import FitWidthScrollArea, reflow
 from .theme import BG, LINE, LINE_DARK, MUTED, NAVY, PRIMARY, PRIMARY_TINT, SURFACE, TEXT
 from .widgets import add_shadow
 
@@ -44,6 +46,10 @@ def _pm(png: bytes) -> QPixmap:
     return p
 
 
+CARD_HEIGHT = 100        # every home button has exactly this height
+CARD_ICON = 64
+
+
 class HomeCard(QPushButton):
     """One big coloured home button: picture on the left, number + name, round arrow on the right."""
 
@@ -52,8 +58,11 @@ class HomeCard(QPushButton):
         top, bottom, border, arrow = CARD_COLORS[index % len(CARD_COLORS)]
         self.setObjectName(f"card{index}")
         self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(96)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # one size for every button: same height, and an Ignored width policy so the grid (not the text) sets
+        # the width -> all columns come out exactly equal whatever the label length
+        self.setFixedHeight(CARD_HEIGHT)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.setStyleSheet(
             f"QPushButton#card{index} {{ background: {SURFACE}; border: 1px solid {border}; border-radius: 14px; }}"
             f"QPushButton#card{index}:hover {{ background: #EFF6FF; border: 1px solid {PRIMARY}; }}"
@@ -61,17 +70,19 @@ class HomeCard(QPushButton):
             f"QPushButton#card{index}:disabled {{ background: #E8EDF4; border: 1px solid {LINE}; }}")
         add_shadow(self, 14, 2, 22)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(18, 8, 14, 8)
+        lay.setContentsMargins(16, 8, 14, 8)
         lay.setSpacing(12)
         icon = QLabel(alignment=Qt.AlignCenter)
-        icon.setPixmap(_pm(home_icons.home_icon_png(key, 88)))
-        icon.setFixedSize(92, 92)
+        icon.setPixmap(_pm(home_icons.home_icon_png(key, CARD_ICON)))
+        icon.setFixedSize(CARD_ICON + 4, CARD_ICON + 4)
         text = QLabel(label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
         text.setWordWrap(True)
-        text.setStyleSheet(f"color: {NAVY}; font-size: 17px; font-weight: 700;")
+        text.setMinimumWidth(0)
+        text.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        text.setStyleSheet(f"color: {NAVY}; font-size: 16px; font-weight: 700;")
         go = QLabel(alignment=Qt.AlignCenter)
-        go.setPixmap(_pm(home_icons.arrow_png(arrow, 36)))
-        go.setFixedSize(38, 38)
+        go.setPixmap(_pm(home_icons.arrow_png(arrow, 32)))
+        go.setFixedSize(34, 34)
         for w in (icon, text, go):
             w.setAttribute(Qt.WA_TransparentForMouseEvents)
             w.setStyleSheet(w.styleSheet() + " background: transparent;")
@@ -152,10 +163,9 @@ class MainWindow(QMainWindow):
     # ---------- home page ----------
     def _build_home(self):
         home = QWidget(objectName="home")
-        scroll = QScrollArea()                          # on a small screen the page scrolls instead of growing
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        scroll = FitWidthScrollArea()                   # scrolls up/down only; never sideways
         scroll.setWidget(home)
+        scroll.widthChanged.connect(self._relayout_home)
         self.stack.addWidget(scroll)
         self.home_page = scroll
         root = QVBoxLayout(home)
@@ -183,6 +193,7 @@ class MainWindow(QMainWindow):
                        "<span style='color:#2563EB'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
                        "<span style='color:#2563EB'>&#10004;</span> Reports")
         ticks.setStyleSheet(f"font-size: 16px; font-weight: 600; color: {NAVY}; background: transparent;")
+        ticks.setWordWrap(True)
         mid.addWidget(ticks)
         mid.addStretch()
         bl.addLayout(mid, 1)
@@ -212,39 +223,41 @@ class MainWindow(QMainWindow):
         grid = QGridLayout()
         grid.setHorizontalSpacing(20)
         grid.setVerticalSpacing(18)
+        self.home_grid = grid
+        self.home_btns = []
+        self.home_cols = None
         for i, (label, key) in enumerate(HOME_BUTTONS):
             btn = HomeCard(i, f"{i + 1}. {label}", key)
             btn.setEnabled(permissions.can_open(self.user["role"], key))
             btn.clicked.connect(lambda _=False, k=key, l=label: (open_module(self, k, l), self.refresh_dashboard()))
-            grid.addWidget(btn, i // 4, i % 4)
-        for c in range(4):
-            grid.setColumnStretch(c, 1)
-        body.addLayout(grid, 1)
+            self.home_btns.append(btn)
+        reflow(grid, self.home_btns, 4)
+        body.addLayout(grid)
 
         # ---- today at a glance ----
         strip = QFrame()
         add_shadow(strip, 14, 2, 20)
         strip.setStyleSheet(f"QFrame#strip {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 14px; }}")
         strip.setObjectName("strip")
-        sl = QHBoxLayout(strip)
+        sl = QGridLayout(strip)
         sl.setContentsMargins(14, 10, 14, 10)
+        sl.setHorizontalSpacing(10)
+        sl.setVerticalSpacing(8)
+        self.strip_grid, self.strip_cells, self.strip_cols = sl, [], None
         self.cards = {}
         owner_only = {"cash", "receivable", "last_backup"}
-        first = True
         for key, title in (("today_sales", "Today's Sale"), ("cash", "Cash in Hand"),
                            ("receivable", "Customers Owe You"), ("low_stock", "Low-stock Items"),
                            ("phones_in_stock", "Phones in Stock"), ("qist_overdue", "Qist Overdue"),
                            ("last_backup", "Last Backup")):
             if key in owner_only and self.user["role"] != "owner":
                 continue                      # staff do not see cash, money totals or backup state
-            if not first:
-                line = QFrame()
-                line.setFrameShape(QFrame.VLine)
-                line.setStyleSheet("color: #DDE3EC; background: #DDE3EC; max-width: 1px; border: none;")
-                sl.addWidget(line)
-            first = False
             cell = ClickableFrame()
-            cell.setStyleSheet("QFrame { background: transparent; border: none; }")
+            cell.setObjectName("cell")
+            cell.setMinimumWidth(0)
+            cell.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            cell.setStyleSheet(f"QFrame#cell {{ background: {BG}; border: none; border-radius: 10px; }}"
+                               " QLabel { background: transparent; }")
             cl = QHBoxLayout(cell)
             cl.setContentsMargins(8, 0, 8, 0)
             ic = QLabel()
@@ -269,10 +282,24 @@ class MainWindow(QMainWindow):
                 cell.setCursor(Qt.PointingHandCursor)
                 cell.setToolTip("Click to see the products that are low or finished")
                 cell.clicked.connect(lambda: open_module(self, "low_stock", "Low Stock"))
-            sl.addWidget(cell, 1)
+            self.strip_cells.append(cell)
             self.cards[key] = (v, title)
+        reflow(sl, self.strip_cells, len(self.strip_cells), max_cols=8)
         body.addWidget(strip)
+        body.addStretch(1)
         root.addLayout(body, 1)
+
+    def _relayout_home(self, width):
+        """Buttons: 4 per row on a wide window, 2 on a medium one, 1 on a narrow one (never 3+1 or cut off)."""
+        avail = width - 64
+        cols = columns_for(avail, 250, spacing=20, max_cols=4, allowed=(4, 2, 1))
+        cells = columns_for(avail, 190, spacing=10, max_cols=max(1, len(self.strip_cells)))
+        if cols != self.home_cols:
+            self.home_cols = cols
+            reflow(self.home_grid, self.home_btns, cols)
+        if cells != self.strip_cols:
+            self.strip_cols = cells
+            reflow(self.strip_grid, self.strip_cells, cells, max_cols=8)
 
     def _build_footer(self):
         """Fixed developer band: plain labels (no input), so it can be neither edited nor deleted."""

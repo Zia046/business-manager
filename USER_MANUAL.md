@@ -164,3 +164,9 @@ Note: Urdu SMS ek se zyada hisson mein jata hai, operator ke SMS charges lagte h
 - **Windows ka size:** main window screen ke mutabiq khulti hai, aur har dialog/window screen se bari nahi khulti (zyada se zyada screen ka 92%) aur screen ke andar hi rehti hai. Chhoti screen par Home page scroll hota hai.
 - **Dashboard:** Today's Revenue, Total Sales, Total Purchases, Net Profit, Total Expenses (is mahine ke), Receivables, Payables, Available Stock, baqi numbers, graphs, Recent Transactions, Low Stock Alerts, Top Selling aur Qist list. Staff ko cost/profit/cash ke numbers nazar nahi aate.
 - Print hone wale bills/reports ka design nahi badla.
+
+## Window ke mutabiq Dashboard aur yaksan Home buttons
+- Maximize / restore / window ka size badalnay par Dashboard aur Home page khud apni jagah dobara set ho jatay hain; ab **sideways (horizontal) scroll nahi** hota. Sirf upar-neechay scroll hota hai.
+- Clock aur Calendar poori tarah nazar aatay hain (window bari ho to side mein, chhoti ho to cards ke upar).
+- Cards, graphs aur lists window ki chorai ke hisab se 4/3/2/1 columns mein aajati hain; graphs usi chorai par dobara banti hain.
+- Home ke 8 buttons ab bilkul ek jaisay hain: same height, same icon aur font size, barabar chorai. Click karnay par wohi kaam hota hai jo pehle hota tha.

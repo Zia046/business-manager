@@ -5,12 +5,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import (QCalendarWidget, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+from PySide6.QtWidgets import (QCalendarWidget, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                                QVBoxLayout, QWidget)
 
 from ..reports import charts, home_icons
 from ..services import backup, masters, reports as R
 from .theme import LINE, MUTED, SUCCESS_BG, SUCCESS_TEXT, SURFACE, TEXT, WARN_BG, WARN_TEXT
+from .layout_math import columns_for
+from .responsive import ChartLabel, FitWidthScrollArea, reflow
 from .widgets import make_table, money, set_row
 
 PANEL = f"background: {SURFACE}; border: 1px solid {LINE}; border-radius: 14px;"
@@ -37,6 +39,8 @@ class StatCard(QFrame):
         self.setObjectName("stat")
         self.setStyleSheet(f"QFrame#stat {{ {PANEL} }} QFrame#stat QLabel {{ background: transparent; border: none; }}")
         self.setMinimumHeight(86 if compact else 118)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 12, 16, 12)
         lay.setSpacing(4)
@@ -48,11 +52,13 @@ class StatCard(QFrame):
             ic.setFixedSize(30, 30)
             top.addWidget(ic)
         t = QLabel(title)
+        t.setWordWrap(True)
         t.setStyleSheet(f"color: {MUTED}; font-size: 13px; font-weight: 600;")
         top.addWidget(t, 1)
         lay.addLayout(top)
         self.value = QLabel("-")
-        self.value.setStyleSheet(f"color: {TEXT}; font-size: {20 if compact else 27}px; font-weight: 800;")
+        self.value.setWordWrap(True)
+        self.value.setStyleSheet(f"color: {TEXT}; font-size: {20 if compact else 26}px; font-weight: 800;")
         lay.addWidget(self.value)
         self.pill = QLabel()
         self.pill.hide()
@@ -71,24 +77,24 @@ class StatCard(QFrame):
             self.pill.hide()
 
 
-class DashboardPage(QScrollArea):
+class DashboardPage(FitWidthScrollArea):
     home_requested = Signal()
 
     def __init__(self, db, user, parent=None):
         super().__init__(parent)
         self.db, self.user = db, user
         self.owner = user.get("role", "owner") == "owner"
-        self.setWidgetResizable(True)
-        self.setFrameShape(QFrame.NoFrame)
         body = QWidget(objectName="home")
         self.setWidget(body)
-        outer = QHBoxLayout(body)
-        outer.setContentsMargins(26, 20, 26, 18)
-        outer.setSpacing(22)
-        left, right = QVBoxLayout(), QVBoxLayout()
+        self.outer = QGridLayout(body)
+        self.outer.setContentsMargins(26, 20, 26, 18)
+        self.outer.setHorizontalSpacing(22)
+        self.outer.setColumnStretch(0, 1)
+        self.left = left = QVBoxLayout()
         left.setSpacing(16)
-        outer.addLayout(left, 1)
-        outer.addLayout(right)
+        self.outer.addLayout(left, 0, 0)
+        self._mode = None
+        self.widthChanged.connect(self._relayout)
 
         # ---- title row: logo, shop name, details ----
         head = QHBoxLayout()
@@ -129,52 +135,56 @@ class DashboardPage(QScrollArea):
         else:
             main = ["today_sales", "month_sales", "stock", "low_stock"]
             more = ["today_invoices", "phones_in_stock", "qist_overdue", "open_repairs"]
+        self.stat_grids = []                              # (grid, cards): re-flowed to fit the width
         for keys, compact in ((main, False), (more, True)):
             grid = QGridLayout()
             grid.setHorizontalSpacing(14)
             grid.setVerticalSpacing(14)
-            for i, key in enumerate(keys):
+            group = []
+            for key in keys:
                 card = StatCard(titles[key], ICON.get(key), compact)
-                grid.addWidget(card, i // 4, i % 4)
                 self.cards[key] = card
-            for c in range(4):
-                grid.setColumnStretch(c, 1)
+                group.append(card)
+            reflow(grid, group, 4)
+            self.stat_grids.append((grid, group))
             left.addLayout(grid)
 
         # ---- sales & profit analytics ----
         left.addWidget(self._section("Sales & Profit Analytics"))
         self.sales_labels = {}
-        sg = QGridLayout()
-        sg.setSpacing(14)
-        for i, kind in enumerate(("day", "week", "month", "year")):
-            lab = QLabel(alignment=Qt.AlignCenter)
+        self.sales_grid = QGridLayout()
+        self.sales_grid.setSpacing(14)
+        for kind in ("day", "week", "month", "year"):
+            lab = ChartLabel(0.62)
             lab.setStyleSheet(PANEL)
-            sg.addWidget(lab, i // 2, i % 2)
             self.sales_labels[kind] = lab
-        left.addLayout(sg)
+        reflow(self.sales_grid, list(self.sales_labels.values()), 2)
+        left.addLayout(self.sales_grid)
         self.profit_label = None
         if self.owner:
-            self.profit_label = QLabel(alignment=Qt.AlignCenter)
+            self.profit_label = ChartLabel(0.30)
             self.profit_label.setStyleSheet(PANEL)
             left.addWidget(self.profit_label)
 
         # ---- lists ----
-        lists = QGridLayout()
-        lists.setHorizontalSpacing(14)
-        lists.setVerticalSpacing(14)
-        self.recent_t = self._list_box(lists, 0, 0, "Recent Transactions", ["Date", "Type", "No", "Party", "Amount"], 3)
-        self.low_t = self._list_box(lists, 0, 1, "Low Stock Alerts", ["Product", "In stock"], 0)
-        self.top_t = self._list_box(lists, 1, 0, "Top Selling Products (this month)", ["Product", "Qty", "Amount"], 0)
-        self.qist_t = self._list_box(lists, 1, 1, "Qist due soon / late", ["Customer", "Due", "Amount"], 0)
-        lists.setColumnStretch(0, 1)
-        lists.setColumnStretch(1, 1)
-        left.addLayout(lists)
+        self.lists = QGridLayout()
+        self.lists.setHorizontalSpacing(14)
+        self.lists.setVerticalSpacing(14)
+        self.recent_t, f1 = self._list_box("Recent Transactions", ["Date", "Type", "No", "Party", "Amount"], 3)
+        self.low_t, f2 = self._list_box("Low Stock Alerts", ["Product", "In stock"], 0)
+        self.top_t, f3 = self._list_box("Top Selling Products (this month)", ["Product", "Qty", "Amount"], 0)
+        self.qist_t, f4 = self._list_box("Qist due soon / late", ["Customer", "Due", "Amount"], 0)
+        self.list_frames = [f1, f2, f3, f4]
+        reflow(self.lists, self.list_frames, 2)
+        left.addLayout(self.lists)
         left.addStretch(1)
 
         # ---- clock and calendar ----
         side = QFrame()
         side.setObjectName("sidecard")
         side.setStyleSheet(f"QFrame#sidecard {{ {PANEL} }} QFrame#sidecard QLabel {{ background: transparent; border: none; }}")
+        side.setFixedWidth(300)                          # the clock/calendar panel; the page makes room for it
+        self.side = side
         sl = QVBoxLayout(side)
         sl.setContentsMargins(14, 14, 14, 14)
         self.clock_img = QLabel(alignment=Qt.AlignCenter)
@@ -187,11 +197,10 @@ class DashboardPage(QScrollArea):
         sl.addWidget(self.date_lbl)
         self.calendar = QCalendarWidget()
         self.calendar.setGridVisible(False)
-        self.calendar.setFixedWidth(280)
+        self.calendar.setMinimumWidth(0)
         self.calendar.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader)
         sl.addWidget(self.calendar)
-        right.addWidget(side)
-        right.addStretch(1)
+        self.outer.addWidget(side, 0, 1, Qt.AlignTop)
         self._today = None
         self.refresh_header()
         self.tick()
@@ -202,8 +211,28 @@ class DashboardPage(QScrollArea):
         lab.setStyleSheet("font-size: 17px; font-weight: 800; padding-top: 6px;")
         return lab
 
+    # ---- fit the window: re-flow everything whenever the width changes (maximise, restore, drag) ----
+    def _relayout(self, width):
+        wide = width >= 1020                               # clock + calendar beside the page, else above it
+        left_w = width - 52 - (322 if wide else 0)
+        mode = (wide, columns_for(left_w, 205), columns_for(left_w, 300, max_cols=2), columns_for(left_w, 330, max_cols=2))
+        if mode == self._mode:
+            return
+        self._mode = mode
+        _, stat_cols, chart_cols, list_cols = mode
+        if wide:
+            self.left.removeWidget(self.side)
+            self.outer.addWidget(self.side, 0, 1, Qt.AlignTop)
+        else:
+            self.outer.removeWidget(self.side)
+            self.left.insertWidget(1, self.side, 0, Qt.AlignLeft)
+        for grid, group in self.stat_grids:
+            reflow(grid, group, stat_cols)
+        reflow(self.sales_grid, list(self.sales_labels.values()), chart_cols)
+        reflow(self.lists, self.list_frames, list_cols)
+
     @staticmethod
-    def _list_box(grid, row, col, title, headers, stretch_col):
+    def _list_box(title, headers, stretch_col):
         frame = QFrame()
         frame.setObjectName("listbox")
         frame.setStyleSheet(f"QFrame#listbox {{ {PANEL} }} QFrame#listbox QLabel {{ background: transparent; border: none; }}")
@@ -215,10 +244,11 @@ class DashboardPage(QScrollArea):
         box.addWidget(lab)
         t = make_table(headers, stretch_col=stretch_col)
         t.setFixedHeight(190)
+        t.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)   # never force the page wider
+        t.setMinimumWidth(0)
         t.setStyleSheet("QTableWidget { border: none; background: transparent; }")
         box.addWidget(t)
-        grid.addWidget(frame, row, col)
-        return t
+        return t, frame
 
     # ---- shop details ----
     def refresh_header(self):
@@ -286,12 +316,12 @@ class DashboardPage(QScrollArea):
         names = {"day": "Daily sales (last 14 days)", "week": "Weekly sales (last 8 weeks)",
                  "month": "Monthly sales (last 12 months)", "year": "Yearly sales"}
         for kind, lab in self.sales_labels.items():
-            lab.setPixmap(_pix(charts.to_png(charts.bar_chart(R.sales_series(self.db, kind), names[kind],
-                                                              size=(380, 240)))))
+            series = R.sales_series(self.db, kind)
+            lab.set_source(lambda size, s=series, n=names[kind]: charts.to_png(charts.bar_chart(s, n, size=size)))
         if self.profit_label is not None:
-            self.profit_label.setPixmap(_pix(charts.to_png(charts.bar_chart(
-                R.profit_series(self.db), "Profit / Loss per month (green = profit, red = loss)", size=(790, 250),
-                signed=True))))
+            series = R.profit_series(self.db)
+            self.profit_label.set_source(lambda size, s=series: charts.to_png(charts.bar_chart(
+                s, "Profit / Loss per month (green = profit, red = loss)", size=size, signed=True)))
         recent = R.recent_transactions(self.db, 8, include_purchases=self.owner)
         self._fill(self.recent_t, [[r["date"][:10], r["kind"], r["no"], r["party"], money(r["amount"])]
                                    for r in recent], (4,))
