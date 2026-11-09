@@ -38,6 +38,13 @@ QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QDouble
 QDateEdit:focus {{ border: 2px solid {PRIMARY}; padding: 5px 9px; }}
 QComboBox QAbstractItemView {{ background: {SURFACE}; border: 1px solid {LINE}; selection-background-color: {PRIMARY_TINT};
     selection-color: {TEXT}; outline: none; }}
+/* Cell editors (Quantity, Price, Discount ... typed inside a table): a table row is only about 30 px high, so the
+   editor must not carry the big padding of normal input boxes - that is what cut off the bottom of the digits. */
+QAbstractItemView QLineEdit, QAbstractItemView QDoubleSpinBox, QAbstractItemView QSpinBox, QAbstractItemView QDateEdit,
+QAbstractItemView QComboBox, QAbstractItemView QLineEdit:hover, QAbstractItemView QDoubleSpinBox:hover,
+QAbstractItemView QSpinBox:hover, QAbstractItemView QLineEdit:focus, QAbstractItemView QDoubleSpinBox:focus,
+QAbstractItemView QSpinBox:focus, QAbstractItemView QDateEdit:focus, QAbstractItemView QComboBox:focus {{
+    padding: 0px 4px; margin: 0px; min-height: 0px; border: 1px solid {PRIMARY}; border-radius: 0px; }}
 QTableWidget, QTableView, QListWidget {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 8px;
     gridline-color: {LINE}; alternate-background-color: {ROW_ALT}; selection-background-color: {PRIMARY_TINT};
     selection-color: {TEXT}; }}

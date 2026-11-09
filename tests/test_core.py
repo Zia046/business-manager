@@ -1575,3 +1575,15 @@ def test_dashboard_overview_and_recent_transactions(shop):
     rows = reports.recent_transactions(db)
     assert {r["kind"] for r in rows} == {"Sale", "Purchase"} and rows[0]["amount"] in (300, 1000)
     assert {r["kind"] for r in reports.recent_transactions(db, include_purchases=False)} == {"Sale"}
+
+
+def test_table_cell_editors_have_no_big_padding():
+    """Typed digits were cut off because table cell editors inherited the 6px padding of normal input boxes."""
+    import importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location("theme", pathlib.Path(__file__).resolve().parent.parent / "app/ui/theme.py")
+    theme = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(theme)
+    css = theme.STYLESHEET
+    for sel in ("QAbstractItemView QLineEdit", "QAbstractItemView QDoubleSpinBox:focus", "QAbstractItemView QLineEdit:focus"):
+        assert sel in css                                         # incl. :focus, which would otherwise win over the override
+    assert "padding: 0px 4px; margin: 0px; min-height: 0px" in css
