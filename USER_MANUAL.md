@@ -81,7 +81,9 @@ Front page par "Developed by Burhan Nexus, 03475093446, ziaullah.046@gmail.com" 
 
 **Install:** `BusinessManager-Setup.exe` chalayein. Wizard mein Next dabate jayein; Desktop aur Start Menu shortcut ke options pehle se tick hain. Install ke baad "Start Business Manager now" tick kar ke Finish karein. Software **Settings > Apps** mein se uninstall bhi hota hai (aap ka data D:\BusinessManagerData mehfooz rehta hai).
 
-**Activation:** pehli dafa software "Machine Code" dikhata hai. Ye code Burhan Nexus (03475093446) ko bhejein. Wahan se aap ko Activation Key milegi; usay paste kar ke Activate dabayein. Key sirf usi computer par chalti hai.
+**7 din ka Free Trial:** naye computer par software pehli dafa khultay hi 7 din ka free trial khud shuru ho jata hai. Koi key nahi maangi jati aur tamam features khulay hotay hain. Dobara install karnay, data folder mitanay ya Windows ki tareekh peechay karnay se naya trial nahi milta.
+
+**Activation:** **Utilities > License Activation** kholein. Wahan licence ka status (Free Trial - Active / Trial Expired / Lifetime Activated) aur "Machine Code" nazar aata hai. Ye code Burhan Nexus (03475093446) ko bhejein. Wahan se aap ko License Key milegi; usay paste kar ke Activate dabayein. Key sirf usi computer par chalti hai. Trial khatam honay par software khultay hi yehi activation screen aati hai; aap ka data waisa hi mehfooz rehta hai.
 
 **Owner ke liye (key banana):** `KeyGenerator.exe` (GitHub Actions ke artifact `KeyGenerator` mein) aur `license_private.key` ek hi folder mein rakhein. Customer ka Machine Code paste karein, muddat chunein, Generate dabayein, aur Key customer ko bhej dein. `license_private.key` kisi ko na dein aur 2 jagah backup rakhein; ye kho gayi to nayi keys nahi ban sakengi.
 

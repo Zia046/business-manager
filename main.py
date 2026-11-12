@@ -49,13 +49,15 @@ def run() -> int:
         QMessageBox.information(None, APP_NAME,
                                 f"Drive D: was not found. Data will be saved in:\n{data_dir}")
 
-    # The software works only with an Activation Key issued for this computer
-    lic = licensing.status(data_dir)
-    if not lic["valid"]:
+    # First launch on a computer starts a 7-day free trial by itself; a key is asked only when it has ended
+    lic = licensing.overall(data_dir)
+    if not lic["can_run"]:
         if ActivationDialog(data_dir, lic["reason"]).exec() != QDialog.Accepted:
             return 0
-        lic = licensing.status(data_dir)
-    if lic["days_left"] is not None and lic["days_left"] <= licensing.WARN_DAYS:
+        lic = licensing.overall(data_dir)
+        if not lic["can_run"]:
+            return 0
+    if lic["state"] == "licensed" and lic["days_left"] is not None and lic["days_left"] <= licensing.WARN_DAYS:
         QMessageBox.information(None, APP_NAME, f"Your licence ends in {lic['days_left']} day(s). "
                                 "Contact Burhan Nexus to renew.")
 

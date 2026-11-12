@@ -6,7 +6,7 @@ purchase prices, profit, accounts, other people's logins, backups or the reset o
 STAFF_ALLOWED = {
     "sale_invoice", "cash_received", "sale_return", "customers", "products", "imei_search", "invoice_print",
     "sale_summary", "outstanding", "customer_transactions", "about", "change_password", "price_list",
-    "labels", "qist", "qist_due", "repairs", "dashboard", "low_stock",
+    "labels", "qist", "qist_due", "repairs", "dashboard", "low_stock", "license",
 }
 
 

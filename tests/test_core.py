@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [6, 6, 4, 3, 14, 8]
+    assert [len(i) for _, i in MENUS] == [6, 6, 4, 3, 14, 9]
     assert len(HOME_BUTTONS) == 8 and HOME_BUTTONS[-1][1] == "dashboard"
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -1596,3 +1596,72 @@ def test_columns_for_fits_width():
     assert columns_for(400, 250, 20, 4, (4, 2, 1)) == 1
     assert columns_for(100, 250) == 1
     assert columns_for(900, 205) == 4
+
+
+# ---------- 7-day free trial ----------
+class _MemStore:
+    def __init__(self, text=""):
+        self.text = text
+
+    def read(self):
+        return self.text
+
+    def write(self, text):
+        self.text = text
+
+
+def test_trial_starts_by_itself_and_lasts_seven_days(tmp_path):
+    from datetime import date, timedelta
+    from app.services import licensing as L
+    stores, d0 = [_MemStore(), _MemStore(), _MemStore()], date(2026, 11, 12)
+    st = L.overall(tmp_path, d0, "PC-A", stores=stores)
+    assert st["can_run"] and st["state"] == "trial" and st["days_left"] == 7 and "Free Trial" in st["label"]
+    assert all(s.text for s in stores)                                    # saved in every place
+    assert L.overall(tmp_path, d0 + timedelta(days=6), "PC-A", stores=stores)["days_left"] == 1
+    st = L.overall(tmp_path, d0 + timedelta(days=7), "PC-A", stores=stores)
+    assert not st["can_run"] and st["label"] == "Trial Expired" and "trial has ended" in st["reason"]
+    assert not L.overall(tmp_path, d0 + timedelta(days=400), "PC-A", stores=stores)["can_run"]
+
+
+def test_trial_cannot_be_reset_by_reinstall_or_date_change(tmp_path):
+    from datetime import date, timedelta
+    from app.services import licensing as L
+    stores, d0 = [_MemStore(), _MemStore(), _MemStore()], date(2026, 11, 12)
+    L.trial_status(tmp_path, d0, "PC-A", stores)
+    L.trial_status(tmp_path, d0 + timedelta(days=5), "PC-A", stores)
+    # re-install / data folder deleted: two of the three copies are gone -> same trial goes on, copies come back
+    stores[0].text = stores[2].text = ""
+    st = L.trial_status(tmp_path, d0 + timedelta(days=5), "PC-A", stores)
+    assert st["days_left"] == 2 and st["start"] == d0 and stores[0].text == stores[1].text == stores[2].text
+    # Windows date moved back: no extra days
+    st = L.trial_status(tmp_path, d0 - timedelta(days=30), "PC-A", stores)
+    assert not st["active"] and "date was moved back" in st["reason"]
+    assert L.trial_status(tmp_path, d0 + timedelta(days=5), "PC-A", stores)["days_left"] == 2   # date corrected
+    # a record edited by hand does not count; with no honest copy left the trial is over
+    edited = stores[1].text.replace("2026-11-12", "2026-12-30")
+    assert L.trial_status(tmp_path, d0 + timedelta(days=5), "PC-A", [_MemStore(edited), stores[0]])["days_left"] == 2
+    assert not L.trial_status(tmp_path, d0 + timedelta(days=5), "PC-A", [_MemStore(edited)])["active"]
+    # a data folder copied from another computer starts that computer's own trial
+    assert L.trial_status(tmp_path, d0 + timedelta(days=20), "PC-B", [_MemStore(stores[0].text)])["days_left"] == 7
+
+
+def test_key_activates_during_and_after_trial_and_data_is_untouched(tmp_path):
+    from datetime import date, timedelta
+    from app.services import licensing as L
+    stores, d0 = [_MemStore(), _MemStore()], date(2026, 11, 12)
+    (tmp_path / "business.db").write_bytes(b"shop data")
+    L.overall(tmp_path, d0, "PC-A", stores=stores)
+    late = d0 + timedelta(days=30)
+    assert L.overall(tmp_path, late, "PC-A", stores=stores)["state"] == "expired"
+    key, pub, _ = _issue("PC-A", None)
+    assert L.activate(tmp_path, "wrong key", "PC-A", pub)[0] is False
+    assert L.overall(tmp_path, late, "PC-A", pub, stores)["state"] == "expired"
+    assert L.activate(tmp_path, key, "PC-A", pub)[0] is True
+    st = L.overall(tmp_path, late, "PC-A", pub, stores)
+    assert st["can_run"] and st["label"] == "Lifetime Activated"
+    assert L.overall(tmp_path, late + timedelta(days=3000), "PC-A", pub, stores)["label"] == "Lifetime Activated"
+    assert (tmp_path / "business.db").read_bytes() == b"shop data"
+    # the file store really writes and reads back
+    fs = L.FileStore(tmp_path / "sub" / "t.dat")
+    L.trial_status(tmp_path, d0, "PC-X", [fs])
+    assert L.trial_status(tmp_path, d0 + timedelta(days=3), "PC-X", [L.FileStore(tmp_path / "sub" / "t.dat")])["days_left"] == 4

@@ -1,6 +1,12 @@
-"""Offline licence: the program works only on a computer for which the owner issued an Activation Key.
+"""Offline licence: a 7-day free trial on every new computer, then an Activation Key issued by the owner.
 
-How it works
+Free trial
+  * Starts by itself on the first launch on a computer and gives full use for TRIAL_DAYS days.
+  * The start date is kept in several places on the computer (signed, and tied to that computer), so
+    re-installing the program or deleting the data folder does not start a new trial, and moving the
+    Windows date back does not give extra days.
+
+Activation key
   * Every computer has a Machine Code (derived from the Windows MachineGuid). It is shown on the
     activation screen.
   * The owner (Burhan Nexus) turns that Machine Code into an Activation Key with his private key
@@ -10,6 +16,8 @@ How it works
 """
 import base64
 import hashlib
+import hmac
+import os
 import sys
 import uuid
 from datetime import date, datetime, timedelta
@@ -28,6 +36,8 @@ _EPOCH = date(2024, 1, 1)
 _LIFETIME = 0xFFFF
 _VERSION = 1
 WARN_DAYS = 7
+TRIAL_DAYS = 7
+TRIAL_FILE = "trial.dat"
 
 
 # ---------------- machine code ----------------
@@ -145,3 +155,134 @@ def _save_seen(data_dir, today):
             (Path(data_dir) / STATE_FILE).write_text(today.isoformat())
         except OSError:
             pass
+
+
+# ---------------- 7-day free trial ----------------
+class FileStore:
+    """One place where the trial record is kept: a small file."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def read(self):
+        try:
+            return self.path.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeDecodeError):
+            return ""
+
+    def write(self, text):
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(text, encoding="utf-8")
+        except OSError:
+            pass
+
+
+class RegistryStore:
+    """Another place: the Windows registry of this user (survives un-install and a deleted data folder)."""
+    KEY, NAME = r"Software\BNSys\Shell", "State"
+
+    def read(self):
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.KEY, 0, winreg.KEY_READ) as k:
+                return str(winreg.QueryValueEx(k, self.NAME)[0]).strip()
+        except (ImportError, OSError):
+            return ""
+
+    def write(self, text):
+        try:
+            import winreg
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.KEY) as k:
+                winreg.SetValueEx(k, self.NAME, 0, winreg.REG_SZ, text)
+        except (ImportError, OSError):
+            pass
+
+
+def default_trial_stores(data_dir):
+    stores = [FileStore(Path(data_dir) / TRIAL_FILE)]
+    if sys.platform.startswith("win"):
+        stores.append(RegistryStore())
+        for env, name in (("PROGRAMDATA", "sys.dat"), ("LOCALAPPDATA", "cache.dat")):
+            if os.environ.get(env):
+                stores.append(FileStore(Path(os.environ[env]) / "BNSys" / name))
+    else:
+        stores.append(FileStore(Path.home() / ".config" / "bnsys" / "state"))
+    return stores
+
+
+def _trial_mac(machine_raw, body: str) -> str:
+    key = hashlib.sha256(b"BN-trial-v1|" + (machine_raw or _raw_machine_id()).encode("utf-8")
+                         + bytes.fromhex(PUBLIC_KEY_HEX)).digest()
+    return hmac.new(key, body.encode("utf-8"), hashlib.sha256).hexdigest()[:40]
+
+
+def _trial_pack(machine_raw, start: date, last: date) -> str:
+    body = f"1|{_clean(machine_code(machine_raw))}|{start.isoformat()}|{last.isoformat()}"
+    return f"{body}|{_trial_mac(machine_raw, body)}"
+
+
+def _trial_parse(machine_raw, text):
+    """-> ("ok", start, last) | ("none",) for empty or another computer's record | ("bad",) if changed by hand."""
+    if not text:
+        return ("none",)
+    parts = text.split("|")
+    if len(parts) != 5 or parts[0] != "1":
+        return ("bad",)
+    if parts[1] != _clean(machine_code(machine_raw)):
+        return ("none",)                        # data folder copied from another computer: not ours
+    if not hmac.compare_digest(parts[4], _trial_mac(machine_raw, "|".join(parts[:4]))):
+        return ("bad",)
+    try:
+        return ("ok", date.fromisoformat(parts[2]), date.fromisoformat(parts[3]))
+    except ValueError:
+        return ("bad",)
+
+
+def trial_status(data_dir, today: date | None = None, machine_raw: str | None = None, stores=None):
+    """Starts the trial on the very first call on this computer. Returns dict(active, days_left, start, reason)."""
+    today = today or date.today()
+    stores = default_trial_stores(data_dir) if stores is None else stores
+    raw = [s.read() for s in stores]
+    found = [_trial_parse(machine_raw, t) for t in raw]
+    good = [f for f in found if f[0] == "ok"]
+    if any(f[0] == "bad" for f in found):
+        if good:                                # keep the honest copies; the changed one is repaired below
+            pass
+        else:
+            return {"active": False, "days_left": 0, "start": None,
+                    "reason": "The free-trial record on this computer was changed. Please activate the software."}
+    if not good:
+        start = last = today                    # first launch on this computer: the trial begins now
+    else:
+        start = min(f[1] for f in good)
+        last = max(f[2] for f in good)
+        if today < last - timedelta(days=1):
+            return {"active": False, "days_left": 0, "start": start,
+                    "reason": "The computer date was moved back. Set the correct date and open the software again."}
+        last = max(last, today)
+    record = _trial_pack(machine_raw, start, last)
+    for s, old in zip(stores, raw):
+        if old != record:
+            s.write(record)                     # also puts back a copy that was deleted
+    left = TRIAL_DAYS - (last - start).days
+    if left <= 0:
+        return {"active": False, "days_left": 0, "start": start,
+                "reason": f"Your {TRIAL_DAYS}-day free trial has ended. Enter a License Key to keep using the "
+                          "software. All your data is safe."}
+    return {"active": True, "days_left": left, "start": start, "reason": ""}
+
+
+def overall(data_dir, today: date | None = None, machine_raw: str | None = None, public_hex: str | None = None,
+            stores=None):
+    """What the program should do now. state: licensed | trial | expired; can_run; label (shown in Settings)."""
+    lic = status(data_dir, today, machine_raw, public_hex)
+    if lic["valid"]:
+        label = "Lifetime Activated" if lic["expiry"] is None else f"Activated (valid until {lic['expiry']:%d-%m-%Y})"
+        return {"state": "licensed", "can_run": True, "label": label, "reason": "", "days_left": lic["days_left"]}
+    trial = trial_status(data_dir, today, machine_raw, stores)
+    if trial["active"]:
+        return {"state": "trial", "can_run": True, "reason": "", "days_left": trial["days_left"],
+                "label": f"Free Trial - Active ({trial['days_left']} day(s) left)"}
+    return {"state": "expired", "can_run": False, "label": "Trial Expired", "days_left": 0,
+            "reason": lic["reason"] or trial["reason"]}
