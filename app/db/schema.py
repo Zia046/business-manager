@@ -72,7 +72,16 @@ CREATE TABLE IF NOT EXISTS loan_entries (            -- balance of a person = lo
     amount REAL NOT NULL CHECK (amount > 0), note TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_loan_entries_person ON loan_entries(person_id);
+
+CREATE TABLE IF NOT EXISTS app_settings (            -- small settings kept inside the (encrypted) database:
+    key TEXT PRIMARY KEY, value TEXT, updated_at TEXT  -- SMS template, business payment details, paired phones
+);
 """
+
+# columns added to `products` for mobile phones (all optional, so old records keep working)
+PHONE_COLUMNS = (("brand", "TEXT"), ("mobile_type", "TEXT"),      # 'smartphone' | 'keypad' | NULL (old record)
+                 ("ram_gb", "INTEGER"), ("storage_gb", "INTEGER"),
+                 ("condition", "TEXT"))                           # 'new' | 'used' | NULL (old record = new)
 
 SCHEMA_SQL = """
 CREATE TABLE company (
@@ -115,7 +124,11 @@ CREATE TABLE products (
     imei_mode TEXT NOT NULL DEFAULT 'single',       -- 'single' or 'double' IMEI phone
     warranty_months INTEGER NOT NULL DEFAULT 0,     -- default warranty given on sale (0 = none)
     barcode TEXT,                                   -- optional: printed on labels, found by a scanner
-    active INTEGER NOT NULL DEFAULT 1
+    active INTEGER NOT NULL DEFAULT 1,
+    brand TEXT,                                     -- phones only, all optional:
+    mobile_type TEXT,                               --   'smartphone' or 'keypad'
+    ram_gb INTEGER, storage_gb INTEGER,             --   smartphone memory in GB
+    condition TEXT                                  --   'new' or 'used'
 );
 CREATE INDEX idx_products_name ON products(name);
 
@@ -244,7 +257,7 @@ CREATE UNIQUE INDEX idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL;
 
 SCHEMA_SQL += V3_TABLES
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def migrate(conn):
@@ -274,5 +287,12 @@ def migrate(conn):
     for stmt in V3_TABLES.split(";"):
         if stmt.strip():
             conn.execute(stmt)
+    have = cols("products")
+    for col, ddl in PHONE_COLUMNS:
+        if col not in have:
+            conn.execute(f"ALTER TABLE products ADD COLUMN {col} {ddl}")
+    # phones bought through "Purchase 2nd Hand Phone" before this version are used phones
+    conn.execute("UPDATE products SET condition='used' WHERE condition IS NULL AND id IN "
+                 "(SELECT product_id FROM used_phones WHERE product_id IS NOT NULL)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL")
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

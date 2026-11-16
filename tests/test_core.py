@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [6, 8, 4, 3, 14, 10]
+    assert [len(i) for _, i in MENUS] == [6, 9, 4, 3, 14, 12]
     assert len(HOME_BUTTONS) == 8 and HOME_BUTTONS[-1][1] == "dashboard"
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -663,7 +663,7 @@ def test_migration_from_old_database():
     assert conn.execute("SELECT imei2 FROM serials").fetchone()["imei2"] is None
     assert conn.execute("SELECT serial2 FROM invoice_items").fetchall() == []
     assert conn.execute("SELECT COUNT(*) AS n FROM categories").fetchone()["n"] == 5
-    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 4
+    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 5
     assert conn.execute("SELECT COUNT(*) AS n FROM repairs").fetchone()["n"] == 0
     for table in ("used_phones", "loan_people", "loan_entries"):          # added later: old data is untouched
         assert conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"] == 0
@@ -1561,7 +1561,7 @@ def test_mobile_reminder_export_has_finished_messages(shop):
     owing = [i for i in data["items"] if i["id"] == cust]
     assert len(owing) == 1
     m = owing[0]["message"]
-    assert "12,500" in m and "xxxxxx" not in m and "Easypaisa" in m and owing[0]["amount"] == 12500
+    assert "12,500" in m and "xxxxxx" not in m and "*" not in m and "روپے" in m and owing[0]["amount"] == 12500
     assert owing[0]["phone"] == "03475093446"
     assert reminders.sms_text("Rs xxxxxx due xxxxxx", 1250.4) == "Rs 1,250 due 1,250"
     json.dumps(data, ensure_ascii=False)                          # can be written as a file
@@ -1846,3 +1846,391 @@ def test_new_screens_names_and_colours():
     for key in home_icons.BADGES:
         assert home_icons.badge_png(key, 30)[:4] == b"\x89PNG" and home_icons.badge_png(key, 30, "teal", True)
     assert charts.to_png(charts.bar_chart([("a", 5), ("b", 9)], "t", size=(300, 180), color=charts.PURPLE))
+
+
+# ---------- phones: type, RAM, storage; Phones in Stock ----------
+P1, P2, P3, P4 = "353000000000013", "353000000000021", "353000000000039", "353000000000047"
+
+
+def test_smartphone_needs_ram_and_storage_keypad_does_not(shop):
+    from app.services import phones
+    db, sup, cust, _ = shop
+    with pytest.raises(BusinessError):                                   # a new smartphone without RAM / storage
+        masters.add_product(db, "Infinix Note 40 Pro", 29000, category="Mobile Phone", mobile_type="smartphone")
+    with pytest.raises(BusinessError):
+        masters.add_product(db, "Infinix Note 40 Pro", 29000, category="Mobile Phone", mobile_type="smartphone",
+                            ram_gb="eight", storage_gb=256)
+    smart = masters.add_product(db, "Note 40 Pro", 29000, category="Mobile Phone", mobile_type="smartphone",
+                                ram_gb=8, storage_gb=256, brand="Infinix", condition="new")
+    keypad = masters.add_product(db, "Nokia 105", 3500, category="Mobile Phone", mobile_type="keypad",
+                                 ram_gb=4, storage_gb=64, brand="Nokia")          # sizes are ignored for a keypad phone
+    old = masters.add_product(db, "Old Record Phone", 9000, category="Mobile Phone")   # as before this feature
+    s, k, o = (db.one("SELECT * FROM products WHERE id=?", (x,)) for x in (smart, keypad, old))
+    assert (s["mobile_type"], s["ram_gb"], s["storage_gb"], s["brand"]) == ("smartphone", 8, 256, "Infinix")
+    assert (k["mobile_type"], k["ram_gb"], k["storage_gb"]) == ("keypad", None, None)
+    assert (o["mobile_type"], o["ram_gb"], o["storage_gb"]) == (None, None, None)
+    assert phones.spec(s) == "8 GB / 256 GB" and phones.spec(k) == "Keypad" and phones.spec(o) == ""
+    assert phones.gb(4) == "4 GB" and phones.gb(None) == "-"
+    masters.update_product(db, smart, ram_gb=12)
+    assert db.one("SELECT ram_gb, storage_gb FROM products WHERE id=?", (smart,)) == {"ram_gb": 12, "storage_gb": 256}
+    with pytest.raises(BusinessError):
+        masters.update_product(db, smart, storage_gb=0)                   # a smartphone cannot lose its storage
+    masters.update_product(db, old, sale_price=9500)                      # old records stay editable as they are
+    other = masters.add_product(db, "Charger", 500, category="Accessories", mobile_type="smartphone")
+    assert db.one("SELECT mobile_type FROM products WHERE id=?", (other,))["mobile_type"] is None
+
+
+def test_phones_in_stock_list_filters_and_sold_phones_disappear(shop):
+    from app.services import phones
+    db, sup, cust, _ = shop
+    smart = masters.add_product(db, "Note 40 Pro", 29000, category="Mobile Phone", mobile_type="smartphone",
+                                ram_gb=8, storage_gb=256, brand="Infinix")
+    keypad = masters.add_product(db, "Nokia 105", 3500, category="Mobile Phone", mobile_type="keypad", brand="Nokia")
+    old = masters.add_product(db, "Old Record Phone", 9000, category="Mobile Phone")
+    trading.create_purchase(db, sup, [{"product_id": smart, "qty": 2, "price": 25000, "serials": [P1, P2]},
+                                      {"product_id": keypad, "qty": 1, "price": 3000, "serials": [P3]},
+                                      {"product_id": old, "qty": 1, "price": 8000, "serials": [P4]}], paid=61000)
+    _used(db, U1, price=20000, sale=26000, mobile_type="smartphone", ram_gb=4, storage_gb=128)
+    rows = phones.in_stock(db)
+    assert len(rows) == 5 == reports.dashboard(db)["phones_in_stock"]
+    by = {r["imei1"]: r for r in rows}
+    assert (by[P1]["brand"], by[P1]["ram_gb"], by[P1]["storage_gb"], by[P1]["condition"]) == ("Infinix", 8, 256, "new")
+    assert (by[P1]["purchase_price"], by[P1]["sale_price"], by[P1]["status"]) == (25000, 29000, "Available")
+    assert by[P3]["mobile_type"] == "keypad" and by[P3]["ram_gb"] is None
+    assert by[P4]["mobile_type"] is None and by[P4]["condition"] == "new"       # an old record still works
+    assert (by[U1]["condition"], by[U1]["purchase_price"], by[U1]["sale_price"]) == ("used", 20000, 26000)
+    assert by[U1]["brand"] == "Infinix" and "4/128GB" in by[U1]["name"]
+    assert {r["imei1"] for r in phones.in_stock(db, condition="used")} == {U1}
+    assert {r["imei1"] for r in phones.in_stock(db, ram=8)} == {P1, P2}
+    assert {r["imei1"] for r in phones.in_stock(db, storage=128)} == {U1}
+    assert {r["imei1"] for r in phones.in_stock(db, mobile_type="keypad")} == {P3}
+    assert {r["imei1"] for r in phones.in_stock(db, "nokia")} == {P3}
+    assert [r["imei1"] for r in phones.in_stock(db, P2[-7:])] == [P2]            # search by IMEI
+    assert [r["purchase_price"] for r in phones.in_stock(db, sort="purchase")] == [3000, 8000, 20000, 25000, 25000]
+    assert phones.in_stock(db, sort="sale", descending=True)[0]["sale_price"] == 29000
+    assert phones.filter_values(db) == {"ram": [4, 8], "storage": [128, 256]}
+    trading.create_invoice(db, cust, [{"product_id": smart, "qty": 1, "price": 29000, "serial": P1}], paid=29000)
+    assert P1 not in {r["imei1"] for r in phones.in_stock(db)} and len(phones.in_stock(db)) == 4
+    sold = db.one("SELECT p.ram_gb, p.storage_gb FROM serials s JOIN products p ON p.id=s.product_id WHERE s.serial=?", (P1,))
+    assert sold == {"ram_gb": 8, "storage_gb": 256}                              # kept with the IMEI after the sale
+    pd = reports.purchase_detail(db, 1)
+    assert "[8 GB / 256 GB]" in pd["items"][0]["product_name"] and "[Keypad]" in pd["items"][1]["product_name"]
+    with pytest.raises(BusinessError):
+        _used(db, U2, mobile_type="smartphone")                                  # used smartphone: sizes required
+    _used(db, U2, mobile_type="keypad", model="Nokia 106")                       # keypad: not required
+
+
+def test_database_update_keeps_a_backup_and_old_products(tmp_path):
+    from app.db.schema import SCHEMA_VERSION
+    db = Database(tmp_path, PW, create=True)
+    with db.transaction() as c:
+        c.execute("INSERT INTO products(name, category, track_serial) VALUES('Old phone', 'Mobile Phone', 1)")
+        c.execute("PRAGMA user_version = 3")
+    db.close()
+    db = Database(tmp_path, PW)
+    assert db.scalar("PRAGMA user_version") == SCHEMA_VERSION
+    assert (tmp_path / "backups" / f"before-update-v3-to-v{SCHEMA_VERSION}.bmdb").exists()
+    p = db.one("SELECT * FROM products WHERE name='Old phone'")
+    assert p["id"] == 1 and p["ram_gb"] is None and p["mobile_type"] is None
+    db.close()
+
+
+# ---------- Outstanding SMS template ----------
+def test_sms_template_placeholder_versions_and_business_details(shop):
+    from app.services import sms_template as T
+    db = shop[0]
+    assert T.render("آپ کے لیجر کے مطابق (****) روپے", 5000) == "آپ کے لیجر کے مطابق 5,000 روپے"
+    assert T.render("Rs **** due, again ****.", 12500.4) == "Rs 12,500 due, again 12,500."
+    assert T.render("( **** ) / ****", 7) == "7 / 7"
+    for bad in ("", "No stars here", "three ***", "five *****", "eight ********"):
+        with pytest.raises(BusinessError):
+            T.check(bad)
+    assert T.count_slots("a **** b (****) c ***** d") == 2
+    cur = T.current(db)
+    assert cur["version"] == 0 and "(****)" in cur["text"] and "محترم صارف" in cur["text"]
+    v1 = T.save(db, "Pay **** please", base_version=0)
+    assert v1["version"] == 1 and T.current(db)["text"] == "Pay **** please" and v1["updated_by"] == "Windows"
+    with pytest.raises(T.TemplateConflict) as exc:                       # an older copy cannot overwrite a newer one
+        T.save(db, "Old phone copy ****", base_version=0, by="Android")
+    assert exc.value.current["version"] == 1 and T.current(db)["text"] == "Pay **** please"
+    with pytest.raises(BusinessError):
+        T.save(db, "forgot the stars", base_version=1)
+    v2 = T.save(db, "Newer **** text", base_version=1, by="Android (Zia)")
+    assert v2["version"] == 2 and T.current(db)["updated_by"] == "Android (Zia)"
+    # business details belong to this installation and feed the default message
+    with db.transaction() as c:
+        c.execute("UPDATE company SET name='Khan Mobiles', phone='0300-1112223' WHERE id=1")
+    assert T.business(db)["easypaisa"] == "" and T.business(db)["business_name"] == "Khan Mobiles"
+    assert T.business(db)["easypaisa"] == "" and "Easypaisa" not in T.default_text(db)
+    T.save_business(db, business_name="Khan Mobiles", contact="0300-1112223", account_name="Khan",
+                    easypaisa="03001112223", jazzcash="03004445556", other="Bank: HBL 1234")
+    d = T.default_text(db)
+    assert d.startswith("Khan Mobiles\n") and "03001112223" in d and "JazzCash" in d and "Bank: HBL 1234" in d
+    assert "Burhan" not in d and "03139271732" not in d and "(****)" in d
+    assert T.restore_default(db, base_version=2)["text"] == d
+    with pytest.raises(BusinessError):
+        T.save_business(db, business_name=" ")
+
+
+def test_default_message_of_burhan_nexus_is_the_requested_one(tmp_path):
+    from app.services import sms_template as T
+    db = auth.register(tmp_path, "Burhan Nexus", "Sahara Center, Buner", "03475093446", "a@b.c", None, "admin", PW, PW)
+    text = T.current(db)["text"]
+    for part in ("Burhan Nexus", "📞 0347-5093446", "محترم صارف،", "(****) روپے کی رقم تاحال واجب الادا ہے",
+                 "Easypaisa ادائیگی کی تفصیل:", "نام: Ziaullah", "نمبر: 03139271732", "تہہ دل سے شکریہ۔"):
+        assert part in text
+    assert "12,500 روپے" in T.render(text, 12500) and "*" not in T.render(text, 12500)
+    db.close()
+
+
+# ---------- Android Companion: pairing, encryption, data ----------
+class _Phone:
+    """What the Android app does, written with the same primitives (see android/.../Crypto.java)."""
+
+    def __init__(self, device_id="phone-0001-abcdef"):
+        self.id, self.key = device_id, None
+
+    def pair_body(self, hello, code):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from app.services import companion as C
+        priv = ec.generate_private_key(ec.SECP256R1())
+        shared = priv.exchange(ec.ECDH(), serialization.load_der_public_key(C._unb64(hello["pub"])))
+        self.key = C.session_key(shared, code, self.id)
+        pub = priv.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+        return {"device_id": self.id, "name": "Test Phone", "pub": C._b64(pub), "proof": C.proof(self.key, "pair|" + self.id)}
+
+    def ask(self, db, op, **args):
+        from app.services import companion as C
+        out = C.unseal(self.key, C.api(db, C.seal(self.key, self.id, {"op": op, "args": args})))
+        return out
+
+
+def _paired(db):
+    from app.services import companion as C
+    pairing, phone = C.Pairing(), _Phone()
+    code = pairing.start()
+    ans = C.pair(db, pairing, phone.pair_body(C.hello(db), code))
+    assert ans["ok"] and ans["proof"] == C.proof(phone.key, "ok|" + ans["server_id"])
+    return phone
+
+
+def test_companion_pairing_needs_the_code_and_unknown_phones_get_nothing(shop):
+    from app.services import companion as C
+    db = shop[0]
+    pairing, phone = C.Pairing(), _Phone()
+    with pytest.raises(C.ApiError) as e:                                 # pairing not opened on the PC
+        C.pair(db, pairing, phone.pair_body(C.hello(db), "123456"))
+    assert e.value.code == "no_code"
+    code = pairing.start()
+    wrong = "000000" if code != "000000" else "111111"
+    with pytest.raises(C.ApiError) as e:
+        C.pair(db, pairing, phone.pair_body(C.hello(db), wrong))
+    assert e.value.code == "wrong_code" and C.devices(db) == []
+    stranger = _Phone("stranger-device-01")
+    stranger.key = os.urandom(32)
+    with pytest.raises(C.ApiError) as e:                                 # not paired: nothing is readable
+        stranger.ask(db, "sync")
+    assert e.value.status == 401
+    C.pair(db, pairing, phone.pair_body(C.hello(db), code))
+    assert [d["name"] for d in C.devices(db)] == ["Test Phone"] and not pairing.active()   # one phone per code
+    assert phone.ask(db, "status")["ok"]
+    thief = _Phone(phone.id)                                             # right id, wrong key
+    thief.key = os.urandom(32)
+    with pytest.raises(C.ApiError):
+        thief.ask(db, "sync")
+    for _ in range(C.CODE_TRIES):                                        # five wrong tries close the code
+        code2 = pairing.code or pairing.start()
+        with pytest.raises(C.ApiError):
+            C.pair(db, pairing, _Phone("another-device-02").pair_body(C.hello(db), "999999" if code2 != "999999" else "888888"))
+    assert not pairing.active()
+    C.remove_device(db, phone.id)
+    with pytest.raises(C.ApiError):
+        phone.ask(db, "status")
+    assert "priv" not in C.hello(db) and set(C.hello(db)) == {"app", "api", "server_id", "shop", "pub", "port"}
+
+
+def test_companion_sync_shows_real_outstanding_and_follows_changes(shop):
+    from app.services import companion as C, installments, loans
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 9, "price": 100}], paid=900)
+    phone = _paired(db)
+    data = phone.ask(db, "sync")["data"]
+    assert data["customers"] == [] and data["summary"]["total_outstanding"] == 0
+    bilal = masters.add_party(db, "customer", "Bilal", phone="0347-5093446")           # new customer on the PC
+    trading.create_invoice(db, bilal, [{"product_id": prod, "qty": 1, "price": 12500}], paid=2500)
+    paidup = masters.add_party(db, "customer", "Paid Up", phone="0300-0000000")
+    trading.create_invoice(db, paidup, [{"product_id": prod, "qty": 1, "price": 900}], paid=900)
+    lid = loans.give_loan(db, "Rashid", 6000, phone="0345-1234567")
+    data = phone.ask(db, "sync")["data"]
+    rows = {r["id"]: r for r in data["customers"]}
+    assert set(rows) == {f"C-{bilal}", f"L-{lid}"}                                     # only real positive balances
+    b = rows[f"C-{bilal}"]
+    assert (b["name"], b["phone"], b["total_purchase"], b["total_paid"], b["balance"]) == ("Bilal", "0347-5093446", 12500, 2500, 10000)
+    assert b["type"] == "customer" and b["last_payment"] and b["ledger"][-1]["balance"] == 10000
+    assert rows[f"L-{lid}"]["type"] == "loan" and rows[f"L-{lid}"]["balance"] == 6000
+    assert data["summary"] == {"total_outstanding": 16000, "customers": 2, "today_recoveries": 0, "overdue_count": 0,
+                               "overdue_amount": 0, "currency": "PKR"}
+    assert [r["balance"] for r in data["customers"]] == [10000, 6000]                  # highest first
+    payments.receive_from_customer(db, bilal, 4000)                                    # payment recorded on the PC
+    loans.receive_repayment(db, lid, 1000)
+    data = phone.ask(db, "sync")["data"]
+    rows = {r["id"]: r for r in data["customers"]}
+    assert rows[f"C-{bilal}"]["balance"] == 6000 and rows[f"C-{bilal}"]["total_paid"] == 6500
+    assert data["summary"]["today_recoveries"] == 5000 and data["summary"]["total_outstanding"] == 11000
+    assert len({l["id"] for l in rows[f"C-{bilal}"]["ledger"]}) == len(rows[f"C-{bilal}"]["ledger"])   # unique ids
+    assert [p["credit"] for p in phone.ask(db, "payments", id=f"C-{bilal}")["data"]] == [2500, 4000]
+    assert phone.ask(db, "ledger", id=f"L-{lid}")["data"][-1]["balance"] == 5000
+    assert phone.ask(db, "summary")["data"]["customers"] == 2 and phone.ask(db, "transactions")["data"]
+    assert "ledger" not in phone.ask(db, "customers")["data"][0]
+    # overdue: a late qist, or nothing paid for more than 30 days
+    from datetime import date, timedelta
+    late = C.outstanding_list(db, False, today=date.today() + timedelta(days=45))
+    assert all(r["overdue"] and "No payment for" in r["overdue_reason"] for r in late)
+    assert C.summary(db, late)["overdue_count"] == 2
+    payments.receive_from_customer(db, bilal, 6000)                                    # fully paid: leaves the list
+    assert {r["id"] for r in phone.ask(db, "sync")["data"]["customers"]} == {f"L-{lid}"}
+    assert phone.ask(db, "ledger", id=f"C-{bilal}")["ok"] is False
+    assert phone.ask(db, "no_such_op")["error"] == "unknown_op"
+
+
+def test_companion_template_is_shared_and_newest_wins(shop):
+    from app.services import sms_template as T
+    db = shop[0]
+    phone = _paired(db)
+    t0 = phone.ask(db, "template_get")["data"]
+    assert t0["version"] == 0 and "****" in t0["text"]
+    T.save(db, "From Windows ****", base_version=0)                       # edited on the PC
+    assert phone.ask(db, "sync")["data"]["template"]["text"] == "From Windows ****"
+    stale = phone.ask(db, "template_save", text="Stale phone copy ****", base_version=0)
+    assert stale["ok"] is False and stale["error"] == "conflict" and stale["data"]["text"] == "From Windows ****"
+    assert T.current(db)["text"] == "From Windows ****"
+    bad = phone.ask(db, "template_save", text="no stars", base_version=1)
+    assert bad["ok"] is False and bad["error"] == "invalid" and "****" in bad["message"]
+    ok = phone.ask(db, "template_save", text="From Android ****", base_version=1)
+    assert ok["ok"] and ok["data"]["version"] == 2 and ok["data"]["updated_by"].startswith("Android")
+    assert T.current(db)["text"] == "From Android ****"                   # ... and Windows shows it
+    biz = phone.ask(db, "business_save", business_name="Khan Mobiles", easypaisa="03001112223")["data"]
+    assert biz["business_name"] == "Khan Mobiles" and T.business(db)["easypaisa"] == "03001112223"
+    assert phone.ask(db, "business_get")["data"] == T.business(db)
+    restored = phone.ask(db, "template_save", restore_default=True, base_version=2)["data"]
+    assert restored["version"] == 3 and restored["text"].startswith("Khan Mobiles")
+
+
+def test_companion_server_over_the_network_with_discovery(shop):
+    """Real sockets on this machine: UDP discovery, /hello, /pair and an encrypted /api call."""
+    import json, queue, socket, threading, urllib.error, urllib.request
+    from app.services import companion as C
+    from app.services.companion_server import CompanionServer
+    db = shop[0]
+    jobs = queue.Queue()
+
+    def run(job):                                                         # like the Qt bridge: the main thread works
+        if threading.current_thread() is threading.main_thread():
+            return job()
+        box = {"done": threading.Event()}
+        jobs.put((job, box))
+        assert box["done"].wait(10)
+        if "error" in box:
+            raise box["error"]
+        return box["result"]
+
+    def on_main(fn):                                                      # do `fn` in a thread, serve jobs meanwhile
+        out = {}
+        t = threading.Thread(target=lambda: out.update(v=fn()))
+        t.start()
+        while t.is_alive():
+            try:
+                job, box = jobs.get(timeout=0.02)
+            except queue.Empty:
+                continue
+            try:
+                box["result"] = job()
+            except BaseException as exc:
+                box["error"] = exc
+            box["done"].set()
+        return out["v"]
+
+    pairing = C.Pairing()
+    srv = CompanionServer(run, lambda: db, pairing, http_port=0, discovery_port=0, host="127.0.0.1")
+    assert srv.start() and srv.running()
+    base = f"http://127.0.0.1:{srv.http_port}"
+
+    def http(path, body=None):
+        req = urllib.request.Request(base + path, data=None if body is None else json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    try:
+        u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)             # "is a Business Manager here?"
+        u.settimeout(5)
+        u.sendto(C.DISCOVER_ASK, ("127.0.0.1", srv.discovery_port))
+        found = json.loads(u.recvfrom(1024)[0])
+        u.close()
+        assert found["app"] == "BNBC" and found["port"] == srv.http_port and "pub" not in found
+        status, hello = on_main(lambda: http("/hello"))
+        assert status == 200 and hello["server_id"] == found["server_id"]
+        phone = _Phone()
+        code = pairing.start()
+        status, ans = on_main(lambda: http("/pair", phone.pair_body(hello, code)))
+        assert status == 200 and ans["ok"]
+        status, env = on_main(lambda: http("/api", C.seal(phone.key, phone.id, {"op": "sync", "args": {}})))
+        assert status == 200 and set(env) == {"d", "n", "c"}             # nothing readable on the wire
+        assert "customers" not in json.dumps(env)
+        assert C.unseal(phone.key, env)["data"]["summary"]["currency"] == "PKR"
+        status, err = on_main(lambda: http("/api", C.seal(os.urandom(32), phone.id, {"op": "sync"})))
+        assert status == 401 and err["error"] == "not_paired"
+        assert on_main(lambda: http("/api", {"d": "nobody", "n": "", "c": ""}))[0] == 401
+        assert on_main(lambda: http("/nothing", {}))[0] == 404
+    finally:
+        srv.stop()
+
+
+def test_android_crypto_and_template_match_the_pc(shop, tmp_path):
+    """Compiles the Android app's Crypto.java / Template.java and runs them against the PC code."""
+    import base64, shutil, subprocess
+    if not shutil.which("javac"):
+        pytest.skip("no Java compiler here")
+    from app.services import companion as C, sms_template as T
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(root, "android", "app", "src", "main", "java", "com", "burhannexus", "companion")
+    subprocess.run(["javac", "-d", str(tmp_path), os.path.join(src, "Crypto.java"), os.path.join(src, "Template.java"),
+                    os.path.join(root, "tests", "java", "Interop.java")], check=True, capture_output=True)
+
+    def java(*args):
+        return subprocess.run(["java", "-cp", str(tmp_path), "Interop", *args], check=True, capture_output=True,
+                              text=True).stdout.strip().split("\n")
+
+    db = shop[0]
+    pairing, device = C.Pairing(), "android-device-0001"
+    code = pairing.start()
+    pub, proof, key, nonce, cipher = java("pair", C.hello(db)["pub"], code, device, '{"op":"status","args":{}}')
+    ans = C.pair(db, pairing, {"device_id": device, "name": "Java", "pub": pub, "proof": proof})
+    assert ans["ok"] and java("proof", key, "ok|" + ans["server_id"]) == [ans["proof"]]
+    env = C.api(db, {"d": device, "n": nonce, "c": cipher})               # sealed by Java, opened by the PC
+    opened = java("open", key, device, env["n"], env["c"])[0]            # sealed by the PC, opened by Java
+    assert '"ok":true' in opened and '"shop"' in opened
+    for text, amount in (("آپ کے لیجر کے مطابق (****) روپے", 5000), ("a **** b ( **** ) c *****", 12500.4),
+                         (T.default_text(db), 987654)):
+        b64 = base64.b64encode(text.encode()).decode()
+        assert base64.b64decode(java("render", str(amount), b64)[0]).decode() == T.render(text, amount)
+    assert java("render", "5", base64.b64encode("no stars ***".encode()).decode()) == ["<null>"]
+
+
+def test_new_update_screens_are_wired():
+    from app.services import permissions
+    from app.ui.menu_spec import IMPLEMENTED, MENUS
+    menus = dict(MENUS)
+    assert ("Mobile App (Android)", "mobile_app") in menus["Utilities"]
+    assert ("Outstanding SMS Template Settings", "sms_template") in menus["Utilities"]
+    assert ("Phones in Stock", "phone_stock") in menus["Sale/Purchase"]
+    assert {"phone_stock", "mobile_app", "sms_template"} <= IMPLEMENTED
+    modules = _import_with_qt_stub("app.ui.modules")
+    assert {"phone_stock", "mobile_app", "sms_template"} <= set(modules.MODULES)
+    assert permissions.can_open("staff", "phone_stock")                   # staff may look up phones (no cost shown)
+    for key in ("mobile_app", "sms_template"):
+        assert permissions.can_open("owner", key) and not permissions.can_open("staff", key)

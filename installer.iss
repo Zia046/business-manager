@@ -45,6 +45,12 @@ Name: "{autoprograms}\Business Manager\Business Manager"; Filename: "{app}\Busin
 Name: "{autoprograms}\Business Manager\Uninstall Business Manager"; Filename: "{uninstallexe}"; Tasks: startmenu
 
 [Run]
+; lets the Android Companion app reach this program on the local Wi-Fi (private networks only)
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Business Manager Companion"""; Flags: runhidden
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Business Manager Companion"" dir=in action=allow program=""{app}\BusinessManager.exe"" enable=yes profile=private,domain"; Flags: runhidden
 Filename: "{app}\BusinessManager.exe"; Description: "Start Business Manager now"; Flags: nowait postinstall skipifsilent
 
 ; Your data (D:\BusinessManagerData) is deliberately NOT listed here, so uninstalling never deletes it.
+
+[UninstallRun]
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Business Manager Companion"""; Flags: runhidden; RunOnceId: "BMFirewall"

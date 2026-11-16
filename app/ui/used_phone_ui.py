@@ -4,10 +4,11 @@ from PySide6.QtWidgets import (QDateEdit, QDialog, QDoubleSpinBox, QFormLayout, 
                                QMessageBox, QPushButton, QVBoxLayout)
 
 from ..config import APP_NAME
-from ..services import used_phones
+from ..services import phones, used_phones
 from ..services.common import BusinessError
 from .enter_safe import EnterSafeDialog
 from .payments_ui import _stamp
+from .phone_fields import PhoneFields
 from .theme import C_GREEN, C_RED, NAVY
 from .widgets import make_table, money, set_row
 
@@ -59,6 +60,7 @@ class UsedPhoneDialog(EnterSafeDialog):
         self.imei2 = QLineEdit(placeholderText="Optional - leave empty if the phone has one IMEI")
         f2.addRow("Purchased Mobile Model *", self.model)
         f2.addRow("Model Number", self.model_no)
+        self.spec = PhoneFields(f2)                 # Mobile Type, RAM (GB), Storage (GB)
         f2.addRow("IMEI Number 1 *", self.imei1)
         f2.addRow("IMEI Number 2", self.imei2)
         lay.addLayout(f2)
@@ -115,7 +117,7 @@ class UsedPhoneDialog(EnterSafeDialog):
                 self.db, self.seller.text(), self.model.text(), self.imei1.text(), self.price.value(),
                 cnic=self.cnic.text(), address=self.address.text(), phone=self.phone.text(),
                 model_no=self.model_no.text(), imei2=self.imei2.text(), sale_price=self.sale_price.value(),
-                date=_stamp(self.date.date()))
+                date=_stamp(self.date.date()), **self.spec.values())
         except BusinessError as exc:
             self.error.setText(str(exc))
             return
@@ -128,6 +130,8 @@ class UsedPhoneDialog(EnterSafeDialog):
             w.clear()
         self.price.setValue(0)
         self.sale_price.setValue(0)
+        self.spec.ram.setValue(0)
+        self.spec.storage.setValue(0)
         self.seller.setFocus()
 
 
@@ -135,7 +139,11 @@ def detail_text(r) -> str:
     lines = [("Record No", r["no"]), ("Purchase Date", r["date"][:16]), ("", ""),
              ("Seller Name", r["seller_name"]), ("CNIC", r["cnic"] or "-"), ("Mobile", r["phone"] or "-"),
              ("Address", r["address"] or "-"), ("", ""),
-             ("Phone Model", r["model"]), ("Model Number", r["model_no"] or "-"), ("IMEI 1", r["imei1"]),
+             ("Phone Model", r["model"]), ("Model Number", r["model_no"] or "-"),
+             ("Mobile Type", phones.TYPES.get(r.get("mobile_type"), "-")),
+             ("RAM", "Not required" if r.get("mobile_type") == "keypad" else phones.gb(r.get("ram_gb"))),
+             ("Storage", "Not required" if r.get("mobile_type") == "keypad" else phones.gb(r.get("storage_gb"))),
+             ("IMEI 1", r["imei1"]),
              ("IMEI 2", r["imei2"] or "-"), ("In stock as", r["product_name"] or "-"), ("", ""),
              ("Purchase Price", money(r["price"])), ("Sale Price", money(r["sale_price"]) if r["sale_price"] else "-"),
              ("Status", r["status"])]
@@ -149,8 +157,8 @@ def detail_text(r) -> str:
 
 
 class UsedPhoneHistory(QDialog):
-    HEADERS = ["No", "Purchase Date", "Seller Name", "Phone Model", "Model Number", "IMEI 1", "IMEI 2",
-               "Purchase Price", "Sale Price", "Status"]
+    HEADERS = ["No", "Purchase Date", "Seller Name", "Phone Model", "Model Number", "RAM / Storage", "IMEI 1",
+               "IMEI 2", "Purchase Price", "Sale Price", "Status"]
 
     def __init__(self, db, parent=None):
         super().__init__(parent)
@@ -189,8 +197,8 @@ class UsedPhoneHistory(QDialog):
         self.table.setRowCount(len(self.rows))
         for i, r in enumerate(self.rows):
             set_row(self.table, i, [r["no"], r["date"][:10], r["seller_name"], r["model"], r["model_no"] or "",
-                                    r["imei1"], r["imei2"] or "", money(r["price"]),
-                                    money(r["sale_price"]) if r["sale_price"] else "", r["status"]], (7, 8))
+                                    phones.spec(r), r["imei1"], r["imei2"] or "", money(r["price"]),
+                                    money(r["sale_price"]) if r["sale_price"] else "", r["status"]], (8, 9))
         in_stock = sum(1 for r in self.rows if r["stock_status"] == "in_stock")
         self.total.setText(f"{len(self.rows)} phone(s) bought   |   total paid {money(sum(r['price'] for r in self.rows))}"
                            f"   |   {in_stock} still in stock")

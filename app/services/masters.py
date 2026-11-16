@@ -130,7 +130,8 @@ def barcode_for(product) -> str:
 @audited("Product added", lambda db,a,k,r: f"{a[0] if a else k.get('name')} (id {r})")
 def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0, category="",
                 tags="", unit="pcs", low_stock_level=0.0, track_serial=False, imei_mode="single",
-                warranty_months=0, barcode="") -> int:
+                warranty_months=0, barcode="", brand="", mobile_type=None, ram_gb=None, storage_gb=None,
+                condition=None) -> int:
     """A category must be chosen. Mobile phones are always IMEI-tracked, must say whether they have a
     single or double IMEI, and cannot have an opening stock (phones enter stock through Stock Purchase,
     where every IMEI number is compulsory)."""
@@ -152,19 +153,25 @@ def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0,
                                 "Purchase, where their IMEI numbers are entered.")
     else:
         imei_mode = "single"
+    from . import phones
+    ph = (phones.clean(mobile_type, ram_gb, storage_gb, condition, brand) if mobile
+          else {"brand": (brand or "").strip() or None, "mobile_type": None, "ram_gb": None, "storage_gb": None,
+                "condition": None})
     with db.transaction() as c:
         cur = c.execute(
             "INSERT INTO products(name,category,tags,unit,last_purchase_price,avg_cost,sale_price,"
-            "opening_stock,low_stock_level,track_serial,imei_mode,warranty_months,barcode) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "opening_stock,low_stock_level,track_serial,imei_mode,warranty_months,barcode,"
+            "brand,mobile_type,ram_gb,storage_gb,condition) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (name.strip(), cat["name"], tags, unit, purchase_price, purchase_price, sale_price,
-             opening_stock, low_stock_level, int(mobile), imei_mode, warranty_months, barcode or None))
+             opening_stock, low_stock_level, int(mobile), imei_mode, warranty_months, barcode or None,
+             ph["brand"], ph["mobile_type"], ph["ram_gb"], ph["storage_gb"], ph["condition"]))
         return cur.lastrowid
 
 
 @audited("Product edited", lambda db,a,k,r: f"id {a[0]}: " + ", ".join(f"{x}={y}" for x,y in k.items()))
 def update_product(db, product_id, **fields):
-    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode", "warranty_months", "barcode"}
+    allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode", "warranty_months",
+               "barcode", "brand", "mobile_type", "ram_gb", "storage_gb", "condition"}
     bad = set(fields) - allowed
     if bad:
         raise BusinessError(f"Cannot edit: {', '.join(sorted(bad))}")
@@ -201,6 +208,15 @@ def update_product(db, product_id, **fields):
         elif fields["imei_mode"] != p["imei_mode"] and db.scalar(
                 "SELECT COUNT(*) FROM serials WHERE product_id=?", (product_id,)):
             raise BusinessError("Single/double IMEI cannot be changed after IMEI numbers were entered.")
+    phone_keys = {"brand", "mobile_type", "ram_gb", "storage_gb", "condition"} & set(fields)
+    if phone_keys:
+        from . import phones
+        if mobile:
+            now_ = {k: fields.get(k, p.get(k)) for k in ("mobile_type", "ram_gb", "storage_gb", "condition", "brand")}
+            fields.update(phones.clean(**now_))
+        else:
+            fields.update({"mobile_type": None, "ram_gb": None, "storage_gb": None, "condition": None,
+                           "brand": (fields.get("brand") or "").strip() or None})
     sets = ", ".join(f"{k}=?" for k in fields)
     with db.transaction() as c:
         c.execute(f"UPDATE products SET {sets} WHERE id=?", (*fields.values(), product_id))

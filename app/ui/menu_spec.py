@@ -29,6 +29,7 @@ MENUS = [
         ("Sale Return", "sale_return"),
         ("Products Purchase", "stock_purchase"),
         ("Purchase Return", "purchase_return"),
+        ("Phones in Stock", "phone_stock"),
         ("Purchase 2nd Hand Phone", "used_phone"),
         ("2nd Hand Phone Purchase History", "used_phone_history"),
         ("Installments (Qist)", "qist"),
@@ -69,6 +70,8 @@ MENUS = [
         ("Staff Accounts", "users"),
         ("Audit Log", "audit_log"),
         ("Cash Loan", "cash_loan"),
+        ("Mobile App (Android)", "mobile_app"),
+        ("Outstanding SMS Template Settings", "sms_template"),
         ("Printer Settings", "printer_settings"),
         ("License Activation", "license"),
         ("Reset Database", "reset_db"),
@@ -84,7 +87,8 @@ IMPLEMENTED = {"dashboard", "company_edit", "about", "change_password", "custome
                "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return",
                "customer_transactions", "cash_received_report", "profit_loss", "invoice_wise", "stock_position",
                "product_ledger", "all_balances", "products_report", "outstanding", "sale_summary", "invoice_print",
-               "backup", "restore", "categories", "reset_db", "printer_settings", "imei_search", "daily_closing", "users", "audit_log", "import_data", "qist", "repairs", "qist_due", "price_list", "labels", "license", "used_phone", "used_phone_history", "cash_loan"}
+               "backup", "restore", "categories", "reset_db", "printer_settings", "imei_search", "daily_closing", "users", "audit_log", "import_data", "qist", "repairs", "qist_due", "price_list", "labels", "license", "used_phone", "used_phone_history", "cash_loan",
+               "phone_stock", "mobile_app", "sms_template"}
 
 
 def all_keys():

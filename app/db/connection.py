@@ -131,9 +131,22 @@ class Database:
             self.conn.executescript(SCHEMA_SQL)
             self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._persist()
-        elif self.conn.execute("PRAGMA user_version").fetchone()["user_version"] < SCHEMA_VERSION:
+        elif (old := self.conn.execute("PRAGMA user_version").fetchone()["user_version"]) < SCHEMA_VERSION:
+            self._backup_before_update(old)
             migrate(self.conn)       # database from an older version of the program
             self._persist()
+
+    def _backup_before_update(self, old_version):
+        """Keep a copy of the database file as it was before a new program version changes its structure."""
+        import shutil
+        try:
+            folder = self.data_dir / "backups"
+            folder.mkdir(parents=True, exist_ok=True)
+            target = folder / f"before-update-v{old_version}-to-v{SCHEMA_VERSION}.bmdb"
+            if not target.exists():
+                shutil.copy2(self.path, target)
+        except OSError:
+            pass                     # a failed copy must not stop the shop from opening its data
 
     # ---------- persistence ----------
     def _persist(self):

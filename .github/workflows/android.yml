@@ -1,4 +1,4 @@
-name: Build Android reminder app (APK)
+name: Build Android Companion app (APK)
 
 on:
   workflow_dispatch:
@@ -26,9 +26,9 @@ jobs:
         run: gradle --no-daemon assembleDebug
 
       - name: Name the file
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk BurhanReminder.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk BurhanNexusCompanion.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BurhanReminder-apk
-          path: BurhanReminder.apk
+          name: BurhanNexusCompanion-apk
+          path: BurhanNexusCompanion.apk

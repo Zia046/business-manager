@@ -155,9 +155,14 @@ def purchase_detail(db, purchase_id):
     pur = db.one("SELECT * FROM purchases WHERE id=?", (purchase_id,))
     if not pur:
         return None
-    items = db.query("SELECT pi.*, p.name AS product_name FROM purchase_items pi "
-                     "JOIN products p ON p.id=pi.product_id WHERE pi.purchase_id=? ORDER BY pi.id",
-                     (purchase_id,))
+    items = db.query("SELECT pi.*, p.name AS product_name, p.mobile_type, p.ram_gb, p.storage_gb "
+                     "FROM purchase_items pi JOIN products p ON p.id=pi.product_id WHERE pi.purchase_id=? "
+                     "ORDER BY pi.id", (purchase_id,))
+    from . import phones
+    for it in items:                                   # phones: RAM / storage shown with the purchased item
+        spec = phones.spec(it)
+        if spec and f"{it['ram_gb']}/{it['storage_gb']}" not in it["product_name"]:
+            it["product_name"] += f"  [{spec}]"
     return {"purchase": pur, "items": items, "party": db.one("SELECT * FROM parties WHERE id=?", (pur["party_id"],)),
             "company": db.one("SELECT * FROM company WHERE id=1"),
             "balance_due": r2(pur["total"] - pur["paid"])}

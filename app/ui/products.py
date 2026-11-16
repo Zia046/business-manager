@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QSpinBox, QFo
 from ..services import masters
 from ..services.common import BusinessError, is_owner
 from .barcode_print import BarcodePrintDialog, ensure_barcode
+from .phone_fields import PhoneFields
 from .widgets import make_table, money, selected_id, set_row
 
 
@@ -59,8 +60,19 @@ class ProductForm(QDialog):
         if product:  # cost and opening stock change only through purchases/sales
             self.purchase.setEnabled(False)
             self.opening.setEnabled(False)
+        self.form = form
+        self.brand = QLineEdit(p.get("brand") or "", placeholderText="e.g. Infinix, Samsung, Nokia")
+        self.condition = QComboBox()
+        self.condition.addItem("New", "new")
+        self.condition.addItem("Used", "used")
+        self.condition.setCurrentIndex(1 if p.get("condition") == "used" else 0)
         form.addRow("Name *", self.name)
         form.addRow("Category *", self.category)
+        form.addRow("Brand", self.brand)
+        # phones: Smartphone needs RAM + Storage (numbers only), Keypad hides both
+        self.phone = PhoneFields(form, p.get("mobile_type"), p.get("ram_gb"), p.get("storage_gb"),
+                                 allow_unknown=bool(product) and not p.get("mobile_type"))
+        form.addRow("Condition", self.condition)
         form.addRow("IMEI type", self.imei_mode)
         form.addRow("Hash tags", self.tags)
         form.addRow("Unit", self.unit)
@@ -103,6 +115,9 @@ class ProductForm(QDialog):
     def _category_changed(self, *_):
         mobile = self._is_mobile()
         self.imei_mode.setEnabled(mobile)
+        self.phone.set_shown(mobile)
+        for w in (self.brand, self.condition):
+            self.form.setRowVisible(w, mobile)
         if mobile:
             self.opening.setValue(0)
             self.opening.setEnabled(False)
@@ -111,6 +126,11 @@ class ProductForm(QDialog):
         else:
             self.opening.setEnabled(self.product is None)
             self.hint.setText("")
+
+    def _phone_values(self) -> dict:
+        if not self._is_mobile():
+            return {}
+        return {**self.phone.values(), "brand": self.brand.text(), "condition": self.condition.currentData()}
 
     def _generate_barcode(self):
         if self.barcode.text().strip() and QMessageBox.question(
@@ -131,14 +151,15 @@ class ProductForm(QDialog):
                                        category=cat, tags=self.tags.text(), unit=self.unit.text(),
                                        sale_price=self.sale.value(), low_stock_level=self.low.value(),
                                        imei_mode=mode, warranty_months=self.warranty.value(),
-                                       barcode=self.barcode.text())
+                                       barcode=self.barcode.text(), **self._phone_values())
                 self.saved_id = self.product["id"]
             else:
                 self.saved_id = masters.add_product(
                     self.db, self.name.text(), self.sale.value(), self.purchase.value(),
                     self.opening.value(), cat, self.tags.text(), self.unit.text(),
                     self.low.value(), imei_mode=mode,
-                    warranty_months=self.warranty.value(), barcode=self.barcode.text())
+                    warranty_months=self.warranty.value(), barcode=self.barcode.text(),
+                    **self._phone_values())
         except BusinessError as exc:
             self.error.setText(str(exc))
             return

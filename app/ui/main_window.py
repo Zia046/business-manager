@@ -150,6 +150,9 @@ class MainWindow(QMainWindow):
         timer.start(1000)
         self.setMinimumSize(900, 560)
         self.setWindowState(Qt.WindowMaximized)       # fills the screen (never taller than it)
+        from .companion_ui import CompanionService   # Android Companion app: off until the owner turns it on
+        self.companion = CompanionService(self)
+        self.companion.start_if_enabled()
 
     # ---------- toolbar (menu bar) ----------
     def _build_menu(self):
@@ -292,6 +295,10 @@ class MainWindow(QMainWindow):
                 cell.setCursor(Qt.PointingHandCursor)
                 cell.setToolTip("Click to see the products that are low or finished")
                 cell.clicked.connect(lambda: open_module(self, "low_stock", "Low Stock"))
+            if key == "phones_in_stock":
+                cell.setCursor(Qt.PointingHandCursor)
+                cell.setToolTip("Click to see every phone that is in stock now")
+                cell.clicked.connect(lambda: open_module(self, "phone_stock", "Phones in Stock"))
             if key == "outstanding":
                 cell.setCursor(Qt.PointingHandCursor)
                 cell.setToolTip("Customers' outstanding + cash loans. Click to see the list")
@@ -423,6 +430,7 @@ class MainWindow(QMainWindow):
             if not dlg.close():
                 event.ignore()
                 return
+        self.companion.stop()
         if not self.skip_exit_backup and self.db.conn is not None:
             backup.auto_backup_on_exit(self.db)   # never blocks closing, even if it fails
         self.db.close()  # writes the final encrypted snapshot (no-op after a restore)

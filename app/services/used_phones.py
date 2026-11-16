@@ -4,7 +4,7 @@ Nothing here is a separate stock: the phone is saved through the normal purchase
 an ordinary phone in stock (IMEI record, stock movement, cash paid in the cash book) and is sold on the
 normal Sale Invoice. Its own product line holds exactly this phone's cost and sale price, so profit on
 the invoice is the real profit of this phone."""
-from . import imei, trading
+from . import imei, phones, trading
 from .common import BusinessError, audited, next_no, now, r2, stock_qty
 from .loans import clean_cnic
 
@@ -30,27 +30,31 @@ def _sellers_party(c) -> int:
     return c.execute("INSERT INTO parties(kind,name) VALUES('supplier',?)", (SELLERS_PARTY,)).lastrowid
 
 
-def _product_for(c, model, model_no, mode, price, sale_price) -> int:
+def _product_for(c, model, model_no, mode, price, sale_price, ph) -> int:
     """The stock line for this phone. A line is used again only when it is empty (its cost then becomes this
     phone's cost) or when it holds phones with exactly the same cost and sale price; otherwise the phone gets
     a line of its own ('... #2'), so one phone's cost never mixes with another's."""
     cat = c.execute("SELECT name FROM categories WHERE is_mobile=1 ORDER BY is_system DESC, id LIMIT 1").fetchone()
     if not cat:
         raise BusinessError("No mobile-phone category exists. Add one in Categories first.")
-    base = " ".join(x for x in (model, model_no) if x) + " " + TAG
+    size = f"{ph['ram_gb']}/{ph['storage_gb']}GB" if ph["ram_gb"] and ph["storage_gb"] else ""
+    base = " ".join(x for x in (model, model_no, size) if x) + " " + TAG
     n = 1
     while True:
         name = base if n == 1 else f"{base} #{n}"
         p = c.execute("SELECT * FROM products WHERE lower(name)=lower(?)", (name,)).fetchone()
         if p is None:
             return c.execute(
-                "INSERT INTO products(name,category,tags,unit,sale_price,track_serial,imei_mode) "
-                "VALUES(?,?,?,'pcs',?,1,?)", (name, cat["name"], "#used #2ndhand", sale_price, mode)).lastrowid
-        if p["active"] and p["track_serial"] and p["imei_mode"] == mode:
+                "INSERT INTO products(name,category,tags,unit,sale_price,track_serial,imei_mode,brand,mobile_type,"
+                "ram_gb,storage_gb,condition) VALUES(?,?,?,'pcs',?,1,?,?,?,?,?,'used')",
+                (name, cat["name"], "#used #2ndhand", sale_price, mode, ph["brand"], ph["mobile_type"],
+                 ph["ram_gb"], ph["storage_gb"])).lastrowid
+        if p["active"] and p["track_serial"] and p["imei_mode"] == mode and (
+                p["mobile_type"] or None, p["ram_gb"], p["storage_gb"]) == (ph["mobile_type"], ph["ram_gb"], ph["storage_gb"]):
             empty = stock_qty(c, p["id"]) <= 0
             if empty or (abs(p["avg_cost"] - price) < 0.005 and abs(p["sale_price"] - sale_price) < 0.005):
                 if empty:
-                    c.execute("UPDATE products SET sale_price=? WHERE id=?", (sale_price, p["id"]))
+                    c.execute("UPDATE products SET sale_price=?, condition='used' WHERE id=?", (sale_price, p["id"]))
                 return p["id"]
         n += 1
 
@@ -58,14 +62,16 @@ def _product_for(c, model, model_no, mode, price, sale_price) -> int:
 @audited("2nd hand phone purchased", lambda db,a,k,r: db.scalar(
     "SELECT no||'  '||model||'  IMEI '||imei1||'  price '||price||'  from '||seller_name FROM used_phones WHERE id=?", (r,), ""))
 def purchase(db, seller_name, model, imei1, price, cnic="", address="", phone="", model_no="", imei2="",
-             sale_price=0, date=None, note="") -> int:
-    """Buy one second-hand phone for cash. IMEI 1 is compulsory, IMEI 2 is optional. Returns the record id."""
+             sale_price=0, date=None, note="", mobile_type=None, ram_gb=None, storage_gb=None, brand="") -> int:
+    """Buy one second-hand phone for cash. IMEI 1 is compulsory, IMEI 2 is optional. A smartphone needs RAM and
+    storage (GB), a keypad phone does not. Returns the record id."""
     seller_name, model, model_no = (seller_name or "").strip(), (model or "").strip(), (model_no or "").strip()
     if not seller_name:
         raise BusinessError("Customer / seller name is required")
     if not model:
         raise BusinessError("Mobile model is required (e.g. Infinix Hot 40)")
     cnic = clean_cnic(cnic)
+    ph = phones.clean(mobile_type, ram_gb, storage_gb, "used", brand or model.split()[0])
     price = _money(price, "purchase price")
     sale_price = _money(sale_price, "sale price", allow_zero=True)
     mode = "double" if (imei2 or "").strip() else "single"
@@ -82,7 +88,7 @@ def purchase(db, seller_name, model, imei1, price, cnic="", address="", phone=""
                                     "The same phone cannot be added twice.")
             if old:         # a phone this shop sold earlier is being bought back: it enters the stock again
                 c.execute("DELETE FROM serials WHERE id=?", (old["id"],))
-        product_id = _product_for(c, model, model_no, mode, price, sale_price)
+        product_id = _product_for(c, model, model_no, mode, price, sale_price, ph)
         no = next_no(c, "UPH")
         purchase_id = trading.post_purchase(
             c, _sellers_party(c), [{"product_id": product_id, "qty": 1, "price": price, "serials": [(i1, i2)]}],
@@ -94,7 +100,7 @@ def purchase(db, seller_name, model, imei1, price, cnic="", address="", phone=""
              price, sale_price, purchase_id, product_id, (note or "").strip())).lastrowid
 
 
-_SELECT = ("SELECT u.*, p.name AS product_name, s.status AS stock_status, i.no AS invoice_no, i.date AS sold_date, "
+_SELECT = ("SELECT u.*, p.name AS product_name, p.mobile_type, p.ram_gb, p.storage_gb, p.brand, s.status AS stock_status, i.no AS invoice_no, i.date AS sold_date, "
            "(SELECT ii.price - ii.discount FROM invoice_items ii WHERE ii.invoice_id=s.invoice_id AND ii.serial=s.serial "
            "LIMIT 1) AS sold_price FROM used_phones u LEFT JOIN products p ON p.id=u.product_id "
            "LEFT JOIN serials s ON s.serial=u.imei1 AND s.purchase_id=u.purchase_id "
