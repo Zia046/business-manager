@@ -152,13 +152,36 @@ Agar customer (walk-in nahi) pehle bhi wahi product khareed chuka ho to Sale Inv
   - **Barcode printer:** kitne barcode chahiye wo likhein, label printer par chhapte hain.
   - **A4 page:** "ek page par kitne barcodes" aur "kitne pages" likhein. Software khud qataron aur columns ka hisaab laga kar page bana deta hai (jaise 21 per page = 3 x 7, 12 per page = 2 x 6).
 
-## Mobile App (SMS reminders) - "Burhan Reminder"
-Computer se customers ko baqaya ki SMS reminder phone ki apni SIM se bhejne ke liye.
-1. **PC par:** Reports > Outstanding / Baqayajat mein **SMS via Mobile App** dabayein. Apna message likhein (jahan raqam chahiye wahan **xxxxxx** likhein, computer har customer ki raqam khud laga dega) aur **Save Message & Export File** dabayein. `reminders.json` file banti hai.
-2. File phone par bhejein (WhatsApp, Bluetooth, USB ya Google Drive).
-3. **Phone par:** GitHub Actions se `BurhanReminder-apk` download karke install karein (pehli dafa "Install unknown apps" ki ijazat dein). App kholein: pehli dafa SMS ki ijazat maangti hai aur poochti hai **konsi SIM** se message jana hai (baad mein **Change SIM** se badal sakte hain).
-4. **Open reminders file** se file chunein. Har customer ke saamne **Send** dabane par message dikhta hai, Send dabayein to us SIM se SMS chala jata hai aur **Sent** likha aata hai. **Send to all not yet sent** sab ko ek ke baad ek bhejta hai.
-Note: Urdu SMS ek se zyada hisson mein jata hai, operator ke SMS charges lagte hain. Naye Android par agar SMS ki ijazat band ho to App info mein teen nuqton wale menu se "Allow restricted settings" dein.
+## Android app - "Burhan Nexus – Business Companion"
+Phone par Outstanding dekhne aur payment reminder bhejne ke liye. Data computer se aap ke apne Wi-Fi par aata hai; internet par kuch nahi jata.
+
+**Pehli dafa (ek hi martaba):**
+1. GitHub > Actions > "Build Android Companion app (APK)" se `BurhanNexusCompanion-apk` download kar ke phone par install karein. Purani "Burhan Reminder" app uninstall kar dein.
+2. Computer par **Utilities > Mobile App (Android)** kholein, "Allow the Android app to connect" par tick lagayein, phir **Pair a new phone** dabayein. 6 hindson ka code aata hai (5 minute ke liye).
+3. Phone aur computer ek hi Wi-Fi par hon. App kholein > **Pair with computer**. App computer ko khud dhoond leti hai (IP likhne ki zaroorat nahi); code likh kar **PAIR** dabayein.
+
+**Rozana:**
+- App khultay hi aur har minute khud sync hoti hai, aur Wi-Fi wapas aatay hi bhi. **SYNC NOW** se foran. "Last Sync" waqt nazar aata hai.
+- Computer band ho ya Wi-Fi na ho to **OFFLINE** likha aata hai aur pichhli sync ka data waisa hi rehta hai.
+- **Dashboard:** Total Outstanding, Customers with Outstanding, Today's Recoveries, Overdue Payments.
+- **Outstanding Customers:** naam ya mobile se search, sort, kam-az-kam raqam aur "Overdue only" filter. Customer par tap se poora ledger aur payment history.
+- **Overdue** woh hai jis ki qist late ho ya jis ne 30 din se kuch ada na kiya ho.
+- **SEND PAYMENT REMINDER:** phone ki apni SMS app khulti hai, number aur message pehle se likha hota hai; Send aap khud dabatay hain. **Send SMS Reminders** se kai customers chun kar ek ke baad ek.
+- Computer ka software khula aur login hona zaroori hai. Phone hatana ho to Mobile App screen mein "Remove Selected Phone".
+
+## Outstanding SMS Template Settings
+- **Kahan:** Utilities > Outstanding SMS Template Settings (computer), ya app mein SMS Template Settings. Dono jagah ek hi message hota hai.
+- Jahan customer ki baqaya raqam aani ho wahan **chaar sitaray \*\*\*\*** likhein (ya `(****)`). Har customer ko us ki apni raqam jati hai, jaise 12,500.
+- **Save Template**, **Preview Message**, **Restore Default Template**. Sitaray na hon to save nahi hota.
+- Agar ek device par purana message khula ho aur doosri par naya save ho chuka ho, to purana naye ko mita nahi sakta; naya message load ho jata hai.
+- **Business and payment details** (Business Name, Contact, Account Name, Easypaisa, JazzCash, Other) har karobar ke apne hain; default message inhi se banta hai.
+
+## Mobile phones: Type, RAM, Storage aur Phones in Stock
+- **Product form** (New Product / Stock Purchase ka naya product) aur **Purchase 2nd Hand Phone** mein: **Mobile Type** (Smartphone ya Keypad / Simple Mobile), **RAM (GB)** aur **Storage (GB)**. Sirf number likhein (8, 256); GB software khud lagata hai.
+- Smartphone ke liye RAM aur Storage zaroori hain. Keypad chunein to dono khanay chhup jatay hain.
+- Brand aur Condition (New / Used) bhi product ke saath mehfooz hotay hain. Puranay products baghair in maloomat ke waisay hi chaltay hain.
+- **Phones in Stock:** Home par "Phones in Stock" par click karein (ya Sale/Purchase menu). Har phone ki alag line: Brand, Model, Type, RAM, Storage, Condition, IMEI, Purchase Price (sirf owner), Selling Price, Status. Search (brand, model, IMEI), filter (New/Used, type, RAM, storage) aur sort (purchase / selling price). Bika hua phone list se khud nikal jata hai.
+- Naya version pehli dafa khulne par database ki ek copy `backups` folder mein `before-update-...` ke naam se rakh leta hai.
 
 ## Professional Blue look, toolbar aur screen ke mutabiq windows
 - **Rang:** saaf halka-grey background, safed cards, gehra neela (navy) toolbar aur footer, neele buttons. Success/munafa hara, warning/baqaya peela, nuqsaan surkh. Koi gradient ya design pattern nahi, sab flat aur saaf.
