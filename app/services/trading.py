@@ -200,53 +200,58 @@ def create_purchase(db, supplier_id, items, paid=0.0, note="", date=None) -> int
     if not items:
         raise BusinessError("Add at least one product")
     with db.transaction() as c:
-        sup = c.execute("SELECT * FROM parties WHERE id=? AND kind='supplier'", (supplier_id,)).fetchone()
-        if not sup:
-            raise BusinessError("Supplier not found")
-        no = next_no(c, "PUR")
-        pid = c.execute("INSERT INTO purchases(no,date,party_id,total) VALUES(?,?,?,0)",
-                        (no, date, supplier_id)).lastrowid
-        total = 0.0
-        for it in items:
-            if it.get("price") is None:
-                raise BusinessError("Enter the purchase price for every product")
-            qty, price = float(it["qty"]), float(it["price"])
-            if qty <= 0 or price < 0:
-                raise BusinessError("Quantity must be positive and price cannot be negative")
-            p = c.execute("SELECT * FROM products WHERE id=?", (it["product_id"],)).fetchone()
-            if not p:
-                raise BusinessError("Product not found")
-            on_hand = max(stock_qty(c, p["id"]), 0)
-            new_avg = (on_hand * p["avg_cost"] + qty * price) / (on_hand + qty)
-            c.execute("UPDATE products SET avg_cost=?, last_purchase_price=? WHERE id=?",
-                      (round(new_avg, 4), price, p["id"]))
-            c.execute("INSERT INTO purchase_items(purchase_id,product_id,qty,price,serial) VALUES(?,?,?,?,?)",
-                      (pid, p["id"], qty, price, None))
-            c.execute("INSERT INTO stock_moves(product_id,date,qty,unit_cost,ref_type,ref_id) "
-                      "VALUES(?,?,?,?,'purchase',?)", (p["id"], date, qty, price, pid))
-            if p["track_serial"]:
-                if qty != int(qty):
-                    raise BusinessError("Phones are bought in whole numbers")
-                raw = it.get("serials") or []
-                if len(raw) != int(qty):
-                    raise BusinessError(f"'{p['name']}': enter the IMEI of every phone "
-                                        f"({int(qty)} phones, {len(raw)} IMEI entries)")
-                for r in raw:
-                    i1, i2 = imei.as_unit(r, p["imei_mode"])
-                    for x in (i1, i2):
-                        if x and c.execute("SELECT 1 FROM serials WHERE serial=? OR imei2=?", (x, x)).fetchone():
-                            raise BusinessError(f"IMEI {x} already exists in the stock")
-                    c.execute("INSERT INTO serials(product_id,serial,imei2,purchase_id) VALUES(?,?,?,?)",
-                              (p["id"], i1, i2, pid))
-            total += qty * price
-        total, paid = r2(total), r2(paid)
-        if paid < 0 or paid > total:
-            raise BusinessError("Paid amount must be between 0 and the purchase total")
-        c.execute("UPDATE purchases SET total=?, paid=?, note=? WHERE id=?", (total, paid, note, pid))
-        post_ledger(c, supplier_id, date, "purchase", pid, credit=total, note=no)
-        post_ledger(c, supplier_id, date, "purchase", pid, debit=paid, note=f"Paid {no}")
-        post_cash(c, date, "out", paid, "purchase", pid, supplier_id, no)
-        return pid
+        return post_purchase(c, supplier_id, items, paid, note, date)
+
+
+def post_purchase(c, supplier_id, items, paid, note, date) -> int:
+    """The purchase itself, inside the caller's transaction (also used by Purchase 2nd Hand Phone)."""
+    sup = c.execute("SELECT * FROM parties WHERE id=? AND kind='supplier'", (supplier_id,)).fetchone()
+    if not sup:
+        raise BusinessError("Supplier not found")
+    no = next_no(c, "PUR")
+    pid = c.execute("INSERT INTO purchases(no,date,party_id,total) VALUES(?,?,?,0)",
+                    (no, date, supplier_id)).lastrowid
+    total = 0.0
+    for it in items:
+        if it.get("price") is None:
+            raise BusinessError("Enter the purchase price for every product")
+        qty, price = float(it["qty"]), float(it["price"])
+        if qty <= 0 or price < 0:
+            raise BusinessError("Quantity must be positive and price cannot be negative")
+        p = c.execute("SELECT * FROM products WHERE id=?", (it["product_id"],)).fetchone()
+        if not p:
+            raise BusinessError("Product not found")
+        on_hand = max(stock_qty(c, p["id"]), 0)
+        new_avg = (on_hand * p["avg_cost"] + qty * price) / (on_hand + qty)
+        c.execute("UPDATE products SET avg_cost=?, last_purchase_price=? WHERE id=?",
+                  (round(new_avg, 4), price, p["id"]))
+        c.execute("INSERT INTO purchase_items(purchase_id,product_id,qty,price,serial) VALUES(?,?,?,?,?)",
+                  (pid, p["id"], qty, price, None))
+        c.execute("INSERT INTO stock_moves(product_id,date,qty,unit_cost,ref_type,ref_id) "
+                  "VALUES(?,?,?,?,'purchase',?)", (p["id"], date, qty, price, pid))
+        if p["track_serial"]:
+            if qty != int(qty):
+                raise BusinessError("Phones are bought in whole numbers")
+            raw = it.get("serials") or []
+            if len(raw) != int(qty):
+                raise BusinessError(f"'{p['name']}': enter the IMEI of every phone "
+                                    f"({int(qty)} phones, {len(raw)} IMEI entries)")
+            for r in raw:
+                i1, i2 = imei.as_unit(r, p["imei_mode"])
+                for x in (i1, i2):
+                    if x and c.execute("SELECT 1 FROM serials WHERE serial=? OR imei2=?", (x, x)).fetchone():
+                        raise BusinessError(f"IMEI {x} already exists in the stock")
+                c.execute("INSERT INTO serials(product_id,serial,imei2,purchase_id) VALUES(?,?,?,?)",
+                          (p["id"], i1, i2, pid))
+        total += qty * price
+    total, paid = r2(total), r2(paid)
+    if paid < 0 or paid > total:
+        raise BusinessError("Paid amount must be between 0 and the purchase total")
+    c.execute("UPDATE purchases SET total=?, paid=?, note=? WHERE id=?", (total, paid, note, pid))
+    post_ledger(c, supplier_id, date, "purchase", pid, credit=total, note=no)
+    post_ledger(c, supplier_id, date, "purchase", pid, debit=paid, note=f"Paid {no}")
+    post_cash(c, date, "out", paid, "purchase", pid, supplier_id, no)
+    return pid
 
 
 # =============== RETURNS ===============

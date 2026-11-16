@@ -23,7 +23,9 @@ from .qist_ui import QistWindow
 from .repairs_ui import RepairsWindow
 from .labels_ui import LabelsDialog
 from .activation import ActivationDialog
+from .loans_ui import CashLoanWindow
 from .printer_ui import PrinterSettingsDialog
+from .used_phone_ui import UsedPhoneDialog, UsedPhoneHistory
 from .reset_ui import ResetDialog
 from .payments_ui import PaymentDialog
 from .sale_invoice import SaleInvoiceDialog
@@ -63,6 +65,9 @@ MODULES = {
     "labels": lambda win: LabelsDialog(win.db, win).exec(),
     "categories": lambda win: CategoriesDialog(win.db, win).exec(),
     "printer_settings": lambda win: PrinterSettingsDialog(win.db, win).exec(),
+    "used_phone": lambda win: UsedPhoneDialog(win.db, win).exec(),
+    "used_phone_history": lambda win: UsedPhoneHistory(win.db, win).exec(),
+    "cash_loan": lambda win: (CashLoanWindow(win.db, win).exec(), win.refresh_dashboard()),
     "license": lambda win: ActivationDialog(win.db.data_dir, parent=win, from_settings=True).exec(),
     "import_data": lambda win: ImportDialog(win.db, win).exec(),
     "users": lambda win: UsersDialog(win.db, win).exec(),

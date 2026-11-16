@@ -172,3 +172,24 @@ Note: Urdu SMS ek se zyada hisson mein jata hai, operator ke SMS charges lagte h
 - Clock aur Calendar poori tarah nazar aatay hain (window bari ho to side mein, chhoti ho to cards ke upar).
 - Cards, graphs aur lists window ki chorai ke hisab se 4/3/2/1 columns mein aajati hain; graphs usi chorai par dobara banti hain.
 - Home ke 8 buttons ab bilkul ek jaisay hain: same height, same icon aur font size, barabar chorai. Click karnay par wohi kaam hota hai jo pehle hota tha.
+
+## Purchase 2nd Hand Phone (naya)
+- **Kahan:** Home screen ke neechay wali patti mein **Purchase 2nd Hand Phone** par click karein, ya **Sale/Purchase > Purchase 2nd Hand Phone**. Sirf owner khol sakta hai.
+- **Form:** Customer Name, CNIC, Address, Mobile; phir Mobile Model, Model Number, IMEI 1, IMEI 2; phir Purchase Price, **Sale Price** aur Purchase Date (aaj ki tareekh khud aati hai, badal sakte hain).
+- **IMEI 1 zaroori hai, IMEI 2 ikhtiyari.** Sirf ek IMEI likh kar bhi save ho jata hai.
+- **Save ke baad:** phone seedha **Phones in Stock** mein aa jata hai, qeemat Cash in Hand se nikalti hai, aur seller ki maloomat record ke saath mehfooz hoti hain.
+- **Bechna:** aam **Sale Invoice** par phone ka naam ya IMEI likhein. Sale price khud aati hai aur profit/loss usi phone ki apni purchase price se nikalta hai.
+- **Duplicate IMEI:** jo phone stock mein maojood ho woh dobara add nahi hota. Jo phone aap pehle bech chukay hon woh wapas khareeda ja sakta hai.
+- **History:** **Sale/Purchase > 2nd Hand Phone Purchase History** (ya form ka "Purchase History" button). Seller, model, IMEI, qeemat, tareekh aur status (In stock / Sold) nazar aata hai; "View Details" se poori tafseel.
+
+## Cash Loan (naya)
+- **Kahan:** **Utilities > Cash Loan**. Sirf owner.
+- **New Cash Loan:** Person Name, CNIC, Mobile, Address, Loan Amount, Loan Date, Remarks. Raqam Cash in Hand se nikalti hai aur Outstanding mein jama hoti hai.
+- **Ek hi shakhs ko kai loan:** same CNIC (ya same naam aur mobile) ho to sab loan ek hi khatay mein aatay hain.
+- **Receive Repayment:** shakhs chun kar wapas aayi raqam likhein. Thori raqam bhi le sakte hain; baqi khud nikalta hai. Baqi se zyada raqam qabool nahi hoti.
+- **History:** har loan aur har wapsi tareekh aur baqi ke saath.
+- **Outstanding:** list mein "Customer" aur "Cash Loan" alag alag likhay aatay hain, dono ka alag total aur phir ek majmooi total. Koi raqam do dafa nahi ginti.
+
+## Outstanding ka naam aur naye rang
+- "Outstanding / Baqayajat" ab har jagah sirf **Outstanding** hai.
+- Home aur Dashboard par naya colour theme: dark navy menu, safaid/halka grey background, aur har qisam ki maloomat ka apna rang (sabz = sale/profit, sunehra = cash, surkh = wajib-ul-ada raqam, naranji = low stock, cyan/purple = maloomat). Layout aur buttons ki jagah wohi hai.

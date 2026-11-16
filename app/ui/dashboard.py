@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (QCalendarWidget, QFrame, QGridLayout, QHBoxLayout
 
 from ..reports import charts, home_icons
 from ..services import backup, masters, reports as R
-from .theme import LINE, MUTED, SUCCESS_BG, SUCCESS_TEXT, SURFACE, TEXT, WARN_BG, WARN_TEXT
+from .theme import (ACCENTS, C_RED, LINE, MUTED, NAVY, SUCCESS_BG, SUCCESS_TEXT, SURFACE, TEXT, WARN_BG, WARN_TEXT,
+                    blend)
 from .layout_math import columns_for
 from .responsive import ChartLabel, FitWidthScrollArea, reflow
 from .widgets import make_table, money, set_row
@@ -19,10 +20,32 @@ PANEL = f"background: {SURFACE}; border: 1px solid {LINE}; border-radius: 14px;"
 PILL = {"mint": f"background: {SUCCESS_BG}; color: {SUCCESS_TEXT}; border-radius: 9px; padding: 2px 10px; font-size: 11px; font-weight: 700;",
         "yellow": f"background: {WARN_BG}; color: {WARN_TEXT}; border-radius: 9px; padding: 2px 10px; font-size: 11px; font-weight: 700;"}
 # which small picture each card uses (pictures come from the shared icon set)
-ICON = {"today_sales": "today_sales", "month_sales": "today_sales", "month_purchases": "low_stock",
-        "month_profit": "cash", "month_expenses": "cash", "receivable": "receivable", "payable": "receivable",
+ICON = {"today_sales": "today_sales", "month_sales": "sales", "month_purchases": "low_stock",
+        "month_profit": "cash", "month_expenses": "bills", "receivable": "receivable", "payable": "receivable",
         "stock": "low_stock", "low_stock": "low_stock", "cash": "cash", "phones_in_stock": "phones_in_stock",
-        "qist_overdue": "qist_overdue", "last_backup": "last_backup"}
+        "qist_overdue": "qist_overdue", "last_backup": "last_backup", "cash_loans": "cash",
+        "today_invoices": "bills", "open_repairs": "repairs", "year_profit": "sales"}
+# the colour of each card: green = money coming in, gold = profit / cash, red = money owed or spent,
+# orange = warnings, cyan / purple = information, teal = stock, navy = neutral
+TONE = {"today_sales": "green", "month_sales": "navy", "month_purchases": "cyan", "month_profit": "gold",
+        "month_expenses": "red", "receivable": "purple", "payable": "orange", "stock": "teal",
+        "low_stock": "orange", "cash": "gold", "year_profit": "green", "today_invoices": "navy",
+        "phones_in_stock": "cyan", "qist_overdue": "red", "open_repairs": "purple", "last_backup": "teal",
+        "cash_loans": "red"}
+WHITE_PILL = ("background: rgba(255,255,255,0.24); color: #FFFFFF; border-radius: 9px; padding: 2px 10px; "
+              "font-size: 11px; font-weight: 700;")
+CALENDAR_STYLE = f"""
+QCalendarWidget QWidget#qt_calendar_navigationbar {{ background: {NAVY}; border-top-left-radius: 8px;
+    border-top-right-radius: 8px; }}
+QCalendarWidget QToolButton {{ background: transparent; color: #FFFFFF; font-weight: 700; padding: 4px 8px; border: none; }}
+QCalendarWidget QToolButton:hover {{ background: {C_RED}; border-radius: 6px; }}
+QCalendarWidget QSpinBox {{ background: #FFFFFF; color: {TEXT}; }}
+QCalendarWidget QAbstractItemView {{ background: #FFFFFF; selection-background-color: {C_RED};
+    selection-color: #FFFFFF; outline: none; border: none; }}
+"""
+TABLE_STYLE = (f"QTableWidget {{ border: none; background: transparent; }} "
+               f"QHeaderView::section {{ background: {NAVY}; color: #FFFFFF; font-weight: 700; padding: 6px 8px; "
+               f"border: none; border-right: 1px solid {blend(NAVY, '#FFFFFF', 0.25)}; }}")
 
 
 def _pix(png: bytes) -> QPixmap:
@@ -31,13 +54,27 @@ def _pix(png: bytes) -> QPixmap:
     return p
 
 
-class StatCard(QFrame):
-    """One statistic: small icon, title, big value and an optional mint / yellow status pill."""
+CHART_COLOR = {"day": charts.BLUE, "week": charts.CYAN, "month": charts.PURPLE, "year": charts.TEAL}
 
-    def __init__(self, title, icon_key=None, compact=False):
+
+class StatCard(QFrame):
+    """One statistic: small icon, title, big value and an optional status pill.
+    A main card is filled with its colour (white text); a small card is white with a coloured edge."""
+
+    def __init__(self, title, icon_key=None, compact=False, tone="navy"):
         super().__init__()
         self.setObjectName("stat")
-        self.setStyleSheet(f"QFrame#stat {{ {PANEL} }} QFrame#stat QLabel {{ background: transparent; border: none; }}")
+        self.solid = not compact
+        color = ACCENTS[tone]
+        if self.solid:
+            self.setStyleSheet(
+                f"QFrame#stat {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {color}, "
+                f"stop:1 {blend(color, '#000000', 0.20)}); border: none; border-radius: 14px; }} "
+                "QFrame#stat QLabel { background: transparent; border: none; }")
+        else:
+            self.setStyleSheet(f"QFrame#stat {{ background: {SURFACE}; border: 1px solid {LINE}; "
+                               f"border-left: 5px solid {color}; border-radius: 12px; }} "
+                               "QFrame#stat QLabel { background: transparent; border: none; }")
         self.setMinimumHeight(86 if compact else 118)
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -46,19 +83,22 @@ class StatCard(QFrame):
         lay.setSpacing(4)
         top = QHBoxLayout()
         top.setSpacing(8)
-        if icon_key and not compact:
+        if icon_key:
             ic = QLabel()
-            ic.setPixmap(_pix(home_icons.badge_png(icon_key, 30)))
-            ic.setFixedSize(30, 30)
+            px = 34 if self.solid else 26
+            ic.setPixmap(_pix(home_icons.badge_png(icon_key, px, tone, on_color=self.solid)))
+            ic.setFixedSize(px, px)
             top.addWidget(ic)
-        t = QLabel(title)
+        t = QLabel(title.upper() if self.solid else title)
         t.setWordWrap(True)
-        t.setStyleSheet(f"color: {MUTED}; font-size: 13px; font-weight: 600;")
+        t.setStyleSheet("color: rgba(255,255,255,0.92); font-size: 12px; font-weight: 700;" if self.solid
+                        else f"color: {MUTED}; font-size: 13px; font-weight: 600;")
         top.addWidget(t, 1)
         lay.addLayout(top)
         self.value = QLabel("-")
         self.value.setWordWrap(True)
-        self.value.setStyleSheet(f"color: {TEXT}; font-size: {20 if compact else 26}px; font-weight: 800;")
+        self.value.setStyleSheet(f"color: {'#FFFFFF' if self.solid else TEXT}; "
+                                 f"font-size: {20 if compact else 26}px; font-weight: 800;")
         lay.addWidget(self.value)
         self.pill = QLabel()
         self.pill.hide()
@@ -71,7 +111,7 @@ class StatCard(QFrame):
         self.value.setText(value)
         if pill:
             self.pill.setText(pill)
-            self.pill.setStyleSheet(PILL[kind])
+            self.pill.setStyleSheet(WHITE_PILL if self.solid else PILL[kind])
             self.pill.show()
         else:
             self.pill.hide()
@@ -104,7 +144,7 @@ class DashboardPage(FitWidthScrollArea):
         info = QVBoxLayout()
         info.setSpacing(2)
         self.name = QLabel()
-        self.name.setStyleSheet("font-size: 24px; font-weight: 800;")
+        self.name.setStyleSheet(f"font-size: 24px; font-weight: 800; color: {NAVY};")
         self.name.setWordWrap(True)
         self.details = QLabel()
         self.details.setStyleSheet(f"color: {MUTED}; font-size: 13px;")
@@ -113,7 +153,11 @@ class DashboardPage(FitWidthScrollArea):
         info.addWidget(self.details)
         head.addLayout(info, 1)
         home = QPushButton("Home Screen")
-        home.setObjectName("secondary")
+        home.setObjectName("dashHome")               # the page's main action: red
+        home.setStyleSheet(f"QPushButton#dashHome {{ background: {C_RED}; color: #FFFFFF; border: none; "
+                           f"border-radius: 8px; padding: 9px 22px; font-weight: 700; }} "
+                           f"QPushButton#dashHome:hover {{ background: {blend(C_RED, '#000000', 0.14)}; }} "
+                           f"QPushButton#dashHome:pressed {{ background: {blend(C_RED, '#000000', 0.26)}; }}")
         home.clicked.connect(self.home_requested.emit)
         head.addWidget(home, 0, Qt.AlignTop)
         left.addLayout(head)
@@ -126,12 +170,12 @@ class DashboardPage(FitWidthScrollArea):
                   "payable": "Supplier Payables", "stock": "Available Stock", "low_stock": "Low-stock Items",
                   "cash": "Cash in Hand", "year_profit": "Profit This Year", "today_invoices": "Today's Bills",
                   "phones_in_stock": "Phones in Stock", "qist_overdue": "Qist Overdue",
-                  "open_repairs": "Open Repairs", "last_backup": "Last Backup"}
+                  "open_repairs": "Open Repairs", "last_backup": "Last Backup", "cash_loans": "Cash Loans Outstanding"}
         if self.owner:
             main = ["today_sales", "month_sales", "month_purchases", "month_profit", "month_expenses", "receivable",
                     "payable", "stock"]
-            more = ["cash", "year_profit", "today_invoices", "phones_in_stock", "low_stock", "qist_overdue",
-                    "open_repairs", "last_backup"]
+            more = ["cash", "year_profit", "cash_loans", "today_invoices", "phones_in_stock", "low_stock",
+                    "qist_overdue", "open_repairs", "last_backup"]
         else:
             main = ["today_sales", "month_sales", "stock", "low_stock"]
             more = ["today_invoices", "phones_in_stock", "qist_overdue", "open_repairs"]
@@ -142,7 +186,7 @@ class DashboardPage(FitWidthScrollArea):
             grid.setVerticalSpacing(14)
             group = []
             for key in keys:
-                card = StatCard(titles[key], ICON.get(key), compact)
+                card = StatCard(titles[key], ICON.get(key), compact, TONE.get(key, "navy"))
                 self.cards[key] = card
                 group.append(card)
             reflow(grid, group, 4)
@@ -198,6 +242,7 @@ class DashboardPage(FitWidthScrollArea):
         self.calendar = QCalendarWidget()
         self.calendar.setGridVisible(False)
         self.calendar.setMinimumWidth(0)
+        self.calendar.setStyleSheet(CALENDAR_STYLE)
         self.calendar.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader)
         sl.addWidget(self.calendar)
         self.outer.addWidget(side, 0, 1, Qt.AlignTop)
@@ -208,7 +253,8 @@ class DashboardPage(FitWidthScrollArea):
     @staticmethod
     def _section(text):
         lab = QLabel(text)
-        lab.setStyleSheet("font-size: 17px; font-weight: 800; padding-top: 6px;")
+        lab.setStyleSheet(f"font-size: 17px; font-weight: 800; color: {NAVY}; padding: 6px 0 2px 10px; "
+                          f"border-left: 4px solid {C_RED};")
         return lab
 
     # ---- fit the window: re-flow everything whenever the width changes (maximise, restore, drag) ----
@@ -240,13 +286,13 @@ class DashboardPage(FitWidthScrollArea):
         box.setContentsMargins(14, 12, 14, 12)
         box.setSpacing(8)
         lab = QLabel(title)
-        lab.setStyleSheet("font-size: 14px; font-weight: 700;")
+        lab.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {NAVY};")
         box.addWidget(lab)
         t = make_table(headers, stretch_col=stretch_col)
         t.setFixedHeight(190)
         t.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)   # never force the page wider
         t.setMinimumWidth(0)
-        t.setStyleSheet("QTableWidget { border: none; background: transparent; }")
+        t.setStyleSheet(TABLE_STYLE)
         box.addWidget(t)
         return t, frame
 
@@ -306,6 +352,7 @@ class DashboardPage(FitWidthScrollArea):
                 "receivable": (f"{o['receivable']:,.0f}", "Pending" if o["receivable"] > 0 else None, "yellow"),
                 "payable": (f"{o['payable']:,.0f}", "To pay" if o["payable"] > 0 else None, "yellow"),
                 "cash": (f"{d['cash']:,.0f}", None, "mint"),
+                "cash_loans": (f"{d['cash_loans']:,.0f}", "To receive" if d["cash_loans"] > 0 else None, "yellow"),
                 "year_profit": (f"{x['year_profit']:,.0f}", "Profit" if x["year_profit"] >= 0 else "Loss",
                                 "mint" if x["year_profit"] >= 0 else "yellow"),
                 "last_backup": (backup_txt, "Backup now" if hours is None or hours > 48 else None, "yellow"),
@@ -317,7 +364,8 @@ class DashboardPage(FitWidthScrollArea):
                  "month": "Monthly sales (last 12 months)", "year": "Yearly sales"}
         for kind, lab in self.sales_labels.items():
             series = R.sales_series(self.db, kind)
-            lab.set_source(lambda size, s=series, n=names[kind]: charts.to_png(charts.bar_chart(s, n, size=size)))
+            lab.set_source(lambda size, s=series, n=names[kind], c=CHART_COLOR[kind]: charts.to_png(
+                charts.bar_chart(s, n, size=size, color=c)))
         if self.profit_label is not None:
             series = R.profit_series(self.db)
             self.profit_label.set_source(lambda size, s=series: charts.to_png(charts.bar_chart(

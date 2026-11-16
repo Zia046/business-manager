@@ -19,20 +19,25 @@ from .layout_math import columns_for
 from .menu_spec import HOME_BUTTONS, MENUS, SHORTCUTS
 from .modules import open_module
 from .responsive import FitWidthScrollArea, reflow
-from .theme import BG, LINE, LINE_DARK, MUTED, NAVY, PRIMARY, PRIMARY_TINT, SURFACE, TEXT
+from .theme import ACCENTS, BG, C_RED, LINE, LINE_DARK, MUTED, NAVY, PRIMARY_TINT, SURFACE, TEXT, blend, rgb
 from .widgets import add_shadow
 
 IDLE_SECONDS = 90          # after this long without use, the Dashboard is shown
 
 HOME_BG = BG
 
-# (top, bottom, border, arrow colour): every home button looks the same - white card, thin border, blue arrow
-CARD_COLORS = [(SURFACE, SURFACE, LINE_DARK, (37, 99, 235))] * 8
+# every home button has the same shape; each one has its own colour from the shared palette
+CARD_COLORS = ["navy", "red", "green", "gold", "cyan", "purple", "orange", "teal"]
+# the numbers row: (key, title, colour). Money a person owes = red, cash = gold, warnings = orange ...
+STRIP = [("today_sales", "Today's Sale", "green"), ("cash", "Cash in Hand", "gold"),
+         ("outstanding", "Outstanding", "red"), ("low_stock", "Low-stock Items", "orange"),
+         ("phones_in_stock", "Phones in Stock", "cyan"), ("used_phone", "Purchase 2nd Hand Phone", "navy"),
+         ("qist_overdue", "Qist Overdue", "purple"), ("last_backup", "Last Backup", "teal")]
 
 MENU_STYLE = f"""
 QMenuBar {{ background: {NAVY}; color: white; padding: 3px 8px; }}
 QMenuBar::item {{ background: transparent; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; }}
-QMenuBar::item:selected {{ background: {PRIMARY}; }}
+QMenuBar::item:selected {{ background: {C_RED}; }}
 QMenu {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {LINE_DARK}; border-radius: 6px; padding: 4px; }}
 QMenu::item {{ background: transparent; padding: 7px 30px 7px 16px; border-radius: 4px; }}
 QMenu::item:selected {{ background: {PRIMARY_TINT}; color: {TEXT}; }}
@@ -55,7 +60,8 @@ class HomeCard(QPushButton):
 
     def __init__(self, index, label, key, parent=None):
         super().__init__(parent)
-        top, bottom, border, arrow = CARD_COLORS[index % len(CARD_COLORS)]
+        color = ACCENTS[CARD_COLORS[index % len(CARD_COLORS)]]
+        dark, light = blend(color, "#000000", 0.18), blend(color, "#FFFFFF", 0.14)
         self.setObjectName(f"card{index}")
         self.setCursor(Qt.PointingHandCursor)
         # one size for every button: same height, and an Ignored width policy so the grid (not the text) sets
@@ -64,28 +70,30 @@ class HomeCard(QPushButton):
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.setStyleSheet(
-            f"QPushButton#card{index} {{ background: {SURFACE}; border: 1px solid {border}; border-radius: 14px; }}"
-            f"QPushButton#card{index}:hover {{ background: #EFF6FF; border: 1px solid {PRIMARY}; }}"
-            f"QPushButton#card{index}:pressed {{ background: {PRIMARY_TINT}; }}"
-            f"QPushButton#card{index}:disabled {{ background: #E8EDF4; border: 1px solid {LINE}; }}")
+            f"QPushButton#card{index} {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {color}, "
+            f"stop:1 {dark}); border: 1px solid {dark}; border-radius: 14px; }}"
+            f"QPushButton#card{index}:hover {{ background: {light}; border: 1px solid {color}; }}"
+            f"QPushButton#card{index}:pressed {{ background: {dark}; }}"
+            f"QPushButton#card{index}:disabled {{ background: #B8C0CC; border: 1px solid #A9B2BF; }}")
         add_shadow(self, 14, 2, 22)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 8, 14, 8)
         lay.setSpacing(12)
         icon = QLabel(alignment=Qt.AlignCenter)
-        icon.setPixmap(_pm(home_icons.home_icon_png(key, CARD_ICON)))
-        icon.setFixedSize(CARD_ICON + 4, CARD_ICON + 4)
+        icon.setPixmap(_pm(home_icons.home_icon_png(key, CARD_ICON - 12, rgb(color))))
+        icon.setFixedSize(CARD_ICON + 4, CARD_ICON + 4)          # the picture sits on a white tile
         text = QLabel(label, alignment=Qt.AlignVCenter | Qt.AlignLeft)
         text.setWordWrap(True)
         text.setMinimumWidth(0)
         text.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        text.setStyleSheet(f"color: {NAVY}; font-size: 16px; font-weight: 700;")
+        text.setStyleSheet("color: #FFFFFF; font-size: 16px; font-weight: 700; background: transparent;")
         go = QLabel(alignment=Qt.AlignCenter)
-        go.setPixmap(_pm(home_icons.arrow_png(arrow, 32)))
+        go.setPixmap(_pm(home_icons.arrow_png(rgb(blend(color, "#FFFFFF", 0.30)), 32)))
         go.setFixedSize(34, 34)
+        go.setStyleSheet("background: transparent;")
+        icon.setStyleSheet("background: rgba(255,255,255,0.94); border-radius: 14px;")
         for w in (icon, text, go):
             w.setAttribute(Qt.WA_TransparentForMouseEvents)
-            w.setStyleSheet(w.styleSheet() + " background: transparent;")
         lay.addWidget(icon)
         lay.addWidget(text, 1)
         lay.addWidget(go)
@@ -188,10 +196,10 @@ class MainWindow(QMainWindow):
         self.name.setStyleSheet(f"font-size: 40px; font-weight: 800; color: {NAVY}; background: transparent;")
         self.name.setWordWrap(True)
         mid.addWidget(self.name)
-        ticks = QLabel("<span style='color:#2563EB'>&#10004;</span> Sales &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#2563EB'>&#10004;</span> Purchase &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#2563EB'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
-                       "<span style='color:#2563EB'>&#10004;</span> Reports")
+        ticks = QLabel("<span style='color:#D32F3A'>&#10004;</span> Sales &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#D32F3A'>&#10004;</span> Purchase &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#D32F3A'>&#10004;</span> Accounts &nbsp;&nbsp;&nbsp; "
+                       "<span style='color:#D32F3A'>&#10004;</span> Reports")
         ticks.setStyleSheet(f"font-size: 16px; font-weight: 600; color: {NAVY}; background: transparent;")
         ticks.setWordWrap(True)
         mid.addWidget(ticks)
@@ -245,31 +253,33 @@ class MainWindow(QMainWindow):
         sl.setVerticalSpacing(8)
         self.strip_grid, self.strip_cells, self.strip_cols = sl, [], None
         self.cards = {}
-        owner_only = {"cash", "receivable", "last_backup"}
-        for key, title in (("today_sales", "Today's Sale"), ("cash", "Cash in Hand"),
-                           ("receivable", "Customers Owe You"), ("low_stock", "Low-stock Items"),
-                           ("phones_in_stock", "Phones in Stock"), ("qist_overdue", "Qist Overdue"),
-                           ("last_backup", "Last Backup")):
+        owner_only = {"cash", "outstanding", "last_backup", "used_phone"}
+        self.strip_colors = {}
+        for key, title, tone in STRIP:
             if key in owner_only and self.user["role"] != "owner":
-                continue                      # staff do not see cash, money totals or backup state
+                continue                      # staff do not see cash, money totals, purchases or backup state
+            color = ACCENTS[tone]
+            self.strip_colors[key] = color
             cell = ClickableFrame()
             cell.setObjectName("cell")
             cell.setMinimumWidth(0)
             cell.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-            cell.setStyleSheet(f"QFrame#cell {{ background: {BG}; border: none; border-radius: 10px; }}"
-                               " QLabel { background: transparent; }")
+            cell.setStyleSheet(f"QFrame#cell {{ background: {blend(color, '#FFFFFF', 0.90)}; border: 1px solid "
+                               f"{blend(color, '#FFFFFF', 0.72)}; border-left: 4px solid {color}; border-radius: 10px; }}"
+                               " QLabel { background: transparent; border: none; }")
             cl = QHBoxLayout(cell)
-            cl.setContentsMargins(8, 0, 8, 0)
+            cl.setContentsMargins(8, 6, 8, 6)
             ic = QLabel()
-            ic.setPixmap(_pm(home_icons.badge_png(key, 46)))
+            ic.setPixmap(_pm(home_icons.badge_png("receivable" if key == "outstanding" else key, 46, tone)))
             ic.setFixedSize(46, 46)
             cl.addWidget(ic)
             col = QVBoxLayout()
             col.setSpacing(0)
             t = QLabel(title)
-            t.setStyleSheet("color: #64748B; font-size: 13px; font-weight: 600;")
+            t.setWordWrap(True)
+            t.setStyleSheet("color: #475569; font-size: 13px; font-weight: 600;")
             v = QLabel("-")
-            v.setStyleSheet("font-size: 22px; font-weight: 800; color: #1F2937;")
+            v.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {TEXT};")
             col.addWidget(t)
             col.addWidget(v)
             cl.addLayout(col)
@@ -282,9 +292,22 @@ class MainWindow(QMainWindow):
                 cell.setCursor(Qt.PointingHandCursor)
                 cell.setToolTip("Click to see the products that are low or finished")
                 cell.clicked.connect(lambda: open_module(self, "low_stock", "Low Stock"))
+            if key == "outstanding":
+                cell.setCursor(Qt.PointingHandCursor)
+                cell.setToolTip("Customers' outstanding + cash loans. Click to see the list")
+                cell.clicked.connect(lambda: open_module(self, "outstanding", "Outstanding"))
+            if key == "used_phone":
+                v.setText("+ New")
+                v.setStyleSheet(f"font-size: 19px; font-weight: 800; color: {color};")
+                cell.setCursor(Qt.PointingHandCursor)
+                cell.setToolTip("Click to buy a second-hand phone from a person (it goes into Phones in Stock)")
+                cell.clicked.connect(lambda: (open_module(self, "used_phone", "Purchase 2nd Hand Phone"),
+                                              self.refresh_dashboard()))
+                self.strip_cells.append(cell)
+                continue
             self.strip_cells.append(cell)
             self.cards[key] = (v, title)
-        reflow(sl, self.strip_cells, len(self.strip_cells), max_cols=8)
+        reflow(sl, self.strip_cells, len(self.strip_cells), max_cols=9)
         body.addWidget(strip)
         body.addStretch(1)
         root.addLayout(body, 1)
@@ -299,7 +322,7 @@ class MainWindow(QMainWindow):
             reflow(self.home_grid, self.home_btns, cols)
         if cells != self.strip_cols:
             self.strip_cols = cells
-            reflow(self.strip_grid, self.strip_cells, cells, max_cols=8)
+            reflow(self.strip_grid, self.strip_cells, cells, max_cols=9)
 
     def _build_footer(self):
         """Fixed developer band: plain labels (no input), so it can be neither edited nor deleted."""
@@ -357,7 +380,7 @@ class MainWindow(QMainWindow):
         except Exception:
             return                                   # never let a card problem stop the program
         vals = {"today_sales": f"{d['today_sales']:,.0f}  ({d['today_invoices']} bills)", "cash": f"{d['cash']:,.0f}",
-                "receivable": f"{d['receivable']:,.0f}", "low_stock": str(d["low_stock"]),
+                "outstanding": f"{d['outstanding']:,.0f}", "low_stock": str(d["low_stock"]),
                 "phones_in_stock": str(d["phones_in_stock"]), "qist_overdue": str(d["qist_overdue"])}
         info = backup.last_backup_info(self.db.data_dir)
         hours = info["age_hours"]
@@ -369,7 +392,7 @@ class MainWindow(QMainWindow):
             red = (key == "low_stock" and d["low_stock"] > 0) or (key == "qist_overdue" and d["qist_overdue"] > 0) \
                 or (key == "last_backup" and (hours is None or hours > 48))
             box.setText(vals[key])
-            box.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {'#DC2626' if red else '#1F2937'};")
+            box.setStyleSheet(f"font-size: 22px; font-weight: 800; color: {C_RED if red else TEXT};")
 
     def refresh_header(self):
         """Reload company name (CAPITAL LETTERS) and logo, e.g. after Company Information Edit."""

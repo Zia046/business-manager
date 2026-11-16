@@ -1,9 +1,10 @@
-"""Shared look: flat, minimal, five-colour palette (warm ivory, coral red, mint green, soft yellow, charcoal)."""
+"""Shared look: flat and clean. Dark navy navigation, white / light-grey pages, and one accent colour per kind of
+information on the Home screen and the Dashboard (red, green, cyan, orange, purple, gold, teal)."""
 PRIMARY = "#2563EB"        # buttons, selected items
 PRIMARY_DARK = "#1D4ED8"   # hover
 PRIMARY_PRESSED = "#1E40AF"
 PRIMARY_TINT = "#DBEAFE"   # selected row, soft highlights
-NAVY = "#1E293B"           # toolbar and footer
+NAVY = "#14213D"           # toolbar, footer and other navigation areas (dark navy)
 BG = "#F3F5F9"             # page background
 SURFACE = "#FFFFFF"        # cards, inputs, tables
 LINE = "#DDE3EC"           # thin borders
@@ -18,6 +19,30 @@ SUCCESS_TEXT = "#166534"
 WARN_BG = "#FEF3C7"        # pending, warnings
 WARN_TEXT = "#92400E"
 ERROR = "#DC2626"
+
+# Home screen + Dashboard accents (one meaning each)
+C_NAVY = "#1B2A4A"         # main / neutral
+C_RED = "#D32F3A"          # primary actions, important highlights, money owed
+C_GREEN = "#1E8E4E"        # positive money: sales, profit, completed
+C_GOLD = "#D99A06"         # selected financial highlights: cash, net profit
+C_CYAN = "#0E9FC0"         # information
+C_PURPLE = "#5A3EC8"       # secondary information
+C_ORANGE = "#E2620E"       # warnings, low stock
+C_TEAL = "#149A80"         # stock, backup
+ACCENTS = {"navy": C_NAVY, "red": C_RED, "green": C_GREEN, "gold": C_GOLD, "cyan": C_CYAN, "purple": C_PURPLE,
+           "orange": C_ORANGE, "teal": C_TEAL}
+
+
+def rgb(hex_color: str):
+    h = hex_color.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def blend(hex_color: str, other: str = "#FFFFFF", amount: float = 0.5) -> str:
+    """Mix a colour with another one (white by default): amount 0 = the colour itself, 1 = the other."""
+    a, b = rgb(hex_color), rgb(other)
+    return "#%02X%02X%02X" % tuple(round(x + (y - x) * amount) for x, y in zip(a, b))
+
 
 # names other modules already import
 BG_DARK = HEAD_BG
@@ -76,7 +101,7 @@ QTabBar::tab {{ background: {HEAD_BG}; color: {TEXT}; padding: 7px 16px; border-
 QTabBar::tab:selected {{ background: {PRIMARY}; color: #ffffff; font-weight: 700; }}
 QMenuBar {{ background: {NAVY}; color: #ffffff; }}
 QMenuBar::item {{ background: transparent; color: #ffffff; padding: 8px 14px; }}
-QMenuBar::item:selected {{ background: {PRIMARY}; }}
+QMenuBar::item:selected {{ background: {C_RED}; }}
 QMenu {{ background: {SURFACE}; border: 1px solid {LINE}; border-radius: 8px; }}
 QMenu::item {{ background: transparent; padding: 6px 28px; }}
 QMenu::item:selected {{ background: {PRIMARY_TINT}; color: {TEXT}; }}

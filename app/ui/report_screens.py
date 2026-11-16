@@ -77,11 +77,14 @@ def _party_by_cell(rw, sql):
 
 def open_outstanding(win):
     def remind(rw):
+        if str(rw.selected_first_cell() or "").startswith("L-"):
+            QMessageBox.information(rw, "Reminder", "This row is a cash loan. Reminders are sent to customers only.")
+            return
         pid = _party_by_cell(rw, "SELECT id FROM parties WHERE id=? AND kind='customer'")
         if pid:
             phone, text = reminders.balance_message(rw.db, pid)
             send_whatsapp(rw, phone, text)
-    ReportWindow(win.db, B.outstanding_report, "Outstanding / Baqayajat", use_dates=False, parent=win,
+    ReportWindow(win.db, B.outstanding_report, "Outstanding", use_dates=False, parent=win,
                  actions=[("WhatsApp Reminder", remind),
                           ("SMS via Mobile App", lambda rw: MobileReminderDialog(rw.db, rw).exec())]).exec()
 

@@ -213,7 +213,7 @@ def test_menu_spec_matches_requirements():
     from app.ui.menu_spec import HOME_BUTTONS, MENUS, all_keys
     assert [t for t, _ in MENUS] == ["New Account", "Sale/Purchase", "Payments/Receipts",
                                      "Account Transactions", "Reports", "Utilities"]
-    assert [len(i) for _, i in MENUS] == [6, 6, 4, 3, 14, 9]
+    assert [len(i) for _, i in MENUS] == [6, 8, 4, 3, 14, 10]
     assert len(HOME_BUTTONS) == 8 and HOME_BUTTONS[-1][1] == "dashboard"
     assert HOME_BUTTONS[0][0] == "Sale Invoice"
     assert len(all_keys()) == len(set(all_keys())) + 5  # a few keys are shared by design
@@ -663,8 +663,11 @@ def test_migration_from_old_database():
     assert conn.execute("SELECT imei2 FROM serials").fetchone()["imei2"] is None
     assert conn.execute("SELECT serial2 FROM invoice_items").fetchall() == []
     assert conn.execute("SELECT COUNT(*) AS n FROM categories").fetchone()["n"] == 5
-    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 4
     assert conn.execute("SELECT COUNT(*) AS n FROM repairs").fetchone()["n"] == 0
+    for table in ("used_phones", "loan_people", "loan_entries"):          # added later: old data is untouched
+        assert conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"] == 0
+    assert conn.execute("SELECT name FROM products").fetchone()["name"] == "Old product"
 
 
 def test_old_database_file_opens_and_upgrades(tmp_path):
@@ -1665,3 +1668,181 @@ def test_key_activates_during_and_after_trial_and_data_is_untouched(tmp_path):
     fs = L.FileStore(tmp_path / "sub" / "t.dat")
     L.trial_status(tmp_path, d0, "PC-X", [fs])
     assert L.trial_status(tmp_path, d0 + timedelta(days=3), "PC-X", [L.FileStore(tmp_path / "sub" / "t.dat")])["days_left"] == 4
+
+
+# ---------- Purchase 2nd Hand Phone ----------
+U1, U2, U3, U4 = "861234500000011", "861234500000029", "861234500000037", "861234500000045"
+
+
+def _used(db, imei1=U1, imei2="", price=20000, sale=26000, model="Infinix Hot 40", seller="Kamran", **kw):
+    from app.services import used_phones
+    return used_phones.purchase(db, seller, model, imei1, price, cnic=kw.pop("cnic", "1510112345671"),
+                                address="Sahara Center, Buner", phone="03001112223", model_no="X6836",
+                                imei2=imei2, sale_price=sale, **kw)
+
+
+def test_used_phone_with_one_imei_goes_into_stock_and_cash(shop):
+    from app.services import used_phones
+    db, sup, cust, _ = shop
+    cash0, phones0 = reports.cash_in_hand(db), reports.dashboard(db)["phones_in_stock"]
+    rid = _used(db)                                                       # only IMEI 1: must be accepted
+    r = used_phones.detail(db, rid)
+    assert r["no"] == "UPH-00001" and r["imei2"] is None and r["status"] == "In stock"
+    assert r["cnic"] == "15101-1234567-1" and r["seller_name"] == "Kamran" and r["address"] and r["phone"]
+    assert reports.dashboard(db)["phones_in_stock"] == phones0 + 1        # Phones in Stock goes up at once
+    p = db.one("SELECT * FROM products WHERE id=?", (r["product_id"],))
+    assert p["name"] == "Infinix Hot 40 X6836 (2nd Hand)" and p["track_serial"] == 1 and p["imei_mode"] == "single"
+    assert p["avg_cost"] == 20000 and p["sale_price"] == 26000 and p["category"] == "Mobile Phone"
+    assert stock_qty(db.conn, p["id"]) == 1
+    assert reports.cash_in_hand(db) == cash0 - 20000                      # paid in cash, nothing left owing
+    assert reports.all_balances(db, "supplier")["total"] == 0
+    assert any(x["name"] == p["name"] for x in masters.search_products(db, "infinix"))   # in the normal product list
+    look = reports.imei_lookup(db, U1)[0]
+    assert look["status"] == "in_stock" and look["supplier"] == "Kamran (2nd hand)"
+
+
+def test_used_phone_with_two_imeis_and_duplicates_are_refused(shop):
+    from app.services import used_phones
+    db = shop[0]
+    rid = _used(db, U1, U2)
+    r = used_phones.detail(db, rid)
+    assert (r["imei1"], r["imei2"]) == (U1, U2)
+    assert db.one("SELECT imei_mode FROM products WHERE id=?", (r["product_id"],))["imei_mode"] == "double"
+    for a, b in ((U1, ""), (U3, U2), (U2, ""), (U3, U3)):                 # same phone again / same number twice
+        with pytest.raises(BusinessError):
+            _used(db, a, b)
+    for bad in dict(imei1=""), dict(imei1="12ab"), dict(price=0), dict(seller=" "), dict(model=""), dict(cnic="123"):
+        with pytest.raises(BusinessError):
+            _used(db, **{"imei1": U4, **bad})
+    assert db.scalar("SELECT COUNT(*) FROM used_phones") == 1 and db.scalar("SELECT COUNT(*) FROM serials") == 1
+    assert db.scalar("SELECT COUNT(*) FROM purchases") == 1               # a refused purchase leaves nothing behind
+    _used(db, U4, cnic="")                                                # CNIC may be left empty
+
+
+def test_used_phone_is_sold_on_the_normal_invoice_with_its_own_cost(shop):
+    from app.services import used_phones
+    db, sup, cust, _ = shop
+    a = used_phones.detail(db, _used(db, U1, price=20000, sale=26000))
+    b = used_phones.detail(db, _used(db, U2, price=31000, sale=36000))    # same model, other cost: own stock line
+    c = used_phones.detail(db, _used(db, U3, price=20000, sale=26000))    # same cost and price: shares A's line
+    assert b["product_id"] != a["product_id"] and c["product_id"] == a["product_id"]
+    assert b["product_name"].endswith("#2")
+    assert db.one("SELECT avg_cost FROM products WHERE id=?", (b["product_id"],))["avg_cost"] == 31000
+    assert stock_qty(db.conn, a["product_id"]) == 2
+    inv = trading.create_invoice(db, cust, [{"product_id": b["product_id"], "qty": 1, "price": 35000, "serial": U2}],
+                                 paid=35000)
+    assert trading.invoice_profit(db, inv) == 4000                        # 35,000 - its own 31,000
+    sold = used_phones.detail(db, b["id"])
+    assert sold["status"] == "Sold" and sold["sold_price"] == 35000 and sold["profit"] == 4000
+    assert sold["invoice_no"] == "INV-00001"
+    assert stock_qty(db.conn, b["product_id"]) == 0 and reports.dashboard(db)["phones_in_stock"] == 2
+    # the empty line is used again for the next phone of that model, with the new cost and sale price
+    d = used_phones.detail(db, _used(db, U4, price=18000, sale=23000))
+    assert d["product_id"] == b["product_id"]
+    p = db.one("SELECT avg_cost, sale_price FROM products WHERE id=?", (d["product_id"],))
+    assert (p["avg_cost"], p["sale_price"]) == (18000, 23000)
+    # a phone that was sold can be bought back later; it is in stock once, never twice
+    again = used_phones.detail(db, _used(db, U2, price=25000, sale=30000, seller="Ali"))
+    assert again["status"] == "In stock" and db.scalar("SELECT COUNT(*) FROM serials WHERE serial=?", (U2,)) == 1
+    with pytest.raises(BusinessError):
+        _used(db, U2)
+    hist = used_phones.history(db)
+    assert [h["no"] for h in hist][0] == "UPH-00005" and len(hist) == 5
+    assert [h["imei1"] for h in used_phones.history(db, "Ali")] == [U2]
+    assert len(used_phones.history(db, U1[-6:])) == 1
+    for key in ("seller_name", "model", "model_no", "imei1", "imei2", "price", "date", "sale_price"):
+        assert key in hist[0]
+
+
+# ---------- Cash Loan ----------
+def test_cash_loan_repayments_and_outstanding_without_double_counting(shop):
+    from app.reports import builders as B
+    from app.services import loans
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 5, "price": 40000}], paid=200000)
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 50000}], paid=10000)   # Ali owes 40,000
+    cash0, equity0 = reports.cash_in_hand(db), reports.balance_sheet(db)["equity"]
+    pid = loans.give_loan(db, "Rashid Khan", 20000, cnic="15101-7654321-9", phone="03451234567",
+                          address="Buner", note="personal")
+    assert loans.balance(db.conn, pid) == 20000 and reports.cash_in_hand(db) == cash0 - 20000
+    assert reports.balance_sheet(db)["equity"] == equity0                 # lent cash is still ours
+    o = reports.outstanding(db)
+    assert (o["customer_total"], o["loan_total"], o["total"]) == (40000, 20000, 60000)
+    assert reports.all_balances(db, "customer")["total"] == 40000         # the customer's account is untouched
+    assert loans.receive_repayment(db, pid, 5000) == 15000                # the example from the request
+    assert loans.receive_repayment(db, pid, 5000) == 10000
+    assert reports.cash_in_hand(db) == cash0 - 10000
+    with pytest.raises(BusinessError):
+        loans.receive_repayment(db, pid, 10000.5)                         # more than what is left
+    with pytest.raises(BusinessError):
+        loans.receive_repayment(db, pid, 0)
+    # another loan to the same person (same CNIC) lands in the same account
+    assert loans.give_loan(db, "Rashid Khan", 7000, cnic="1510176543219") == pid
+    assert loans.balance(db.conn, pid) == 17000
+    other = loans.give_loan(db, "Naveed", 3000)
+    assert other != pid and loans.give_loan(db, "naveed", 1000) == other
+    rows = {r["name"]: r for r in loans.people(db)}
+    assert (rows["Rashid Khan"]["given"], rows["Rashid Khan"]["returned"], rows["Rashid Khan"]["balance"]) == (27000, 10000, 17000)
+    assert [h["balance"] for h in loans.history(db, pid)] == [20000, 15000, 10000, 17000]
+    assert [h["kind"] for h in loans.history(db, pid)] == ["loan", "repayment", "repayment", "loan"]
+    rep = B.outstanding_report(db)
+    kinds = [r[1] for r in rep["rows"] if r[1]]
+    assert kinds == ["Customer", "Cash Loan", "Cash Loan"] and rep["title"] == "Outstanding"
+    assert ("Total to receive", "61,000.00") in rep["summary"]
+    assert ("Customer outstanding", "40,000.00") in rep["summary"] and ("Cash loan outstanding", "21,000.00") in rep["summary"]
+    assert reports.dashboard(db)["outstanding"] == 61000 and reports.dashboard(db)["receivable"] == 40000
+    # full repayment brings the person to zero and out of the Outstanding list
+    assert loans.receive_repayment(db, pid, 17000) == 0
+    with pytest.raises(BusinessError):
+        loans.receive_repayment(db, pid, 1)
+    assert [r["name"].lower() for r in loans.people(db, only_open=True)] == ["naveed"]
+    assert reports.outstanding(db)["total"] == 44000 and reports.balance_sheet(db)["cash_loans"] == 4000
+    assert reports.balance_sheet(db)["equity"] == equity0
+    cb = B.cash_book_report(db, "2000-01-01", "2100-01-01")
+    assert any("Cash loan given: Rashid Khan" in r[1] for r in cb["rows"])
+    assert any("Cash loan repaid: Rashid Khan" in r[1] for r in cb["rows"])
+    for bad in dict(name=""), dict(amount=0), dict(amount=-5), dict(cnic="12"):
+        with pytest.raises(BusinessError):
+            loans.give_loan(db, **{"name": "X", "amount": 100, **bad})
+
+
+def test_reset_handles_used_phones_and_loans(shop):
+    from app.services import loans, reset, used_phones
+    db = shop[0]
+    _used(db)
+    pid = loans.give_loan(db, "Rashid", 9000)
+    reset.reset_data(db, PW, "clear balances test", ["balances"])
+    assert loans.balance(db.conn, pid) == 0 and reports.outstanding(db)["total"] == 0
+    assert loans.history(db, pid)[-1]["kind"] == "adjustment"
+    reset.reset_data(db, PW, "erase everything test", ["products"])
+    assert used_phones.history(db) == [] and loans.people(db) == []
+    assert db.scalar("SELECT COUNT(*) FROM products") == 0
+
+
+def test_new_screens_names_and_colours():
+    from app.reports import charts, home_icons
+    from app.services import permissions
+    from app.ui.menu_spec import HOME_BUTTONS, IMPLEMENTED, MENUS
+    labels = [l for l, _ in HOME_BUTTONS] + [l for _, items in MENUS for l, _ in items]
+    assert "Outstanding" in labels and not any("baqaya" in l.lower() for l in labels)
+    menus = dict(MENUS)
+    assert ("Cash Loan", "cash_loan") in menus["Utilities"]
+    assert ("Purchase 2nd Hand Phone", "used_phone") in menus["Sale/Purchase"]
+    assert {"used_phone", "used_phone_history", "cash_loan"} <= IMPLEMENTED
+    for key in ("used_phone", "cash_loan"):                               # purchase prices and loans: owner only
+        assert permissions.can_open("owner", key) and not permissions.can_open("staff", key)
+    modules = _import_with_qt_stub("app.ui.modules")
+    assert {"used_phone", "used_phone_history", "cash_loan"} <= set(modules.MODULES)
+    import importlib.util, pathlib
+    spec = importlib.util.spec_from_file_location("theme", pathlib.Path(__file__).resolve().parent.parent / "app/ui/theme.py")
+    theme = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(theme)
+    assert set(theme.ACCENTS) == set(home_icons.PALETTE) == {"navy", "red", "green", "gold", "cyan", "purple", "orange", "teal"}
+    for name, hex_color in theme.ACCENTS.items():
+        assert theme.rgb(hex_color) == home_icons.PALETTE[name]           # screens and icons use the same colours
+    assert theme.blend("#000000", "#FFFFFF", 0.5) == "#808080"
+    for key in home_icons.HOME_ICONS:
+        assert home_icons.home_icon_png(key, 52, home_icons.PALETTE["red"])[:4] == b"\x89PNG"
+    for key in home_icons.BADGES:
+        assert home_icons.badge_png(key, 30)[:4] == b"\x89PNG" and home_icons.badge_png(key, 30, "teal", True)
+    assert charts.to_png(charts.bar_chart([("a", 5), ("b", 9)], "t", size=(300, 180), color=charts.PURPLE))

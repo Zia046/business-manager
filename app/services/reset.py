@@ -17,7 +17,7 @@ OPTIONS = {
     "products": "Products (this also erases all transactions)",
     "customers": "Customers (this also erases all transactions)",
     "suppliers": "Suppliers (this also erases all transactions)",
-    "balances": "Clear all outstanding / baqayajat balances to zero (accounts are kept)",
+    "balances": "Clear all outstanding balances to zero, cash loans included (accounts are kept)",
     "factory": "EVERYTHING: factory reset. Company details, username and password are erased too and the "
                "software asks for registration again",
 }
@@ -72,7 +72,7 @@ def reset_data(db, password, reason, options) -> dict:
     done = []
     with db.transaction() as c:
         if "transactions" in opts:
-            for table in ("installments", "installment_plans", "repairs", "invoice_items", "invoices", "purchase_items", "purchases", "return_items", "returns",
+            for table in ("used_phones", "loan_entries", "loan_people", "installments", "installment_plans", "repairs", "invoice_items", "invoices", "purchase_items", "purchases", "return_items", "returns",
                           "serials", "stock_moves", "ledger", "cash_book", "expenses", "vouchers", "counters"):
                 c.execute(f"DELETE FROM {table}")
             done.append("transactions")
@@ -88,6 +88,8 @@ def reset_data(db, password, reason, options) -> dict:
         if "balances" in opts:
             _clear_balances(c)
             c.execute("UPDATE installment_plans SET status='closed' WHERE status='active'")   # nothing left to collect
+            from . import loans
+            loans.clear_all(c)
             done.append("balances")
     return {"factory": False, "safety": safety, "done": done}
 

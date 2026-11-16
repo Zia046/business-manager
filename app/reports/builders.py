@@ -20,7 +20,8 @@ def _new(title, subtitle, headers, numeric=()):
 def _desc(r):
     labels = {"invoice": "Sale", "purchase": "Purchase", "receipt": "Cash received", "payment": "Paid to supplier",
               "customer_payment": "Paid to customer", "expense": "Expense", "sale_return": "Sale return",
-              "purchase_return": "Purchase return", "repair": "Repair", "cash_adjust": "Cash adjustment"}
+              "purchase_return": "Purchase return", "repair": "Repair", "cash_adjust": "Cash adjustment",
+              "cash_loan": "Cash loan given", "loan_repayment": "Cash loan repaid"}
     base = labels.get(r["ref_type"], r["ref_type"])
     return f"{base}: {r['note']}" if r.get("note") else base
 
@@ -49,7 +50,8 @@ def balance_sheet_report(db, as_of=None):
     b = R.balance_sheet(db)
     rep = _new("Balance Sheet", f"As of {as_of or 'today'}", ["Particulars", "Amount"], (1,))
     rows = [("ASSETS", ""), ("Cash in hand", money(b["cash"])), ("Stock value (at cost)", money(b["stock_value"])),
-            ("Receivables (customers owe us)", money(b["receivables"])), ("TOTAL ASSETS", money(b["total_assets"])),
+            ("Receivables (customers owe us)", money(b["receivables"])),
+            ("Cash loans given (to be received)", money(b["cash_loans"])), ("TOTAL ASSETS", money(b["total_assets"])),
             ("", ""), ("LIABILITIES", ""), ("Payables (we owe suppliers)", money(b["payables"])),
             ("TOTAL LIABILITIES", money(b["total_liabilities"])), ("", ""),
             ("EQUITY / NET WORTH (Assets - Liabilities)", money(b["equity"]))]
@@ -233,15 +235,25 @@ def all_customer_balance_report(db):
 
 
 def outstanding_report(db):
-    """Outstanding / Baqayajat: ONLY customers who still owe us money. Suppliers, wholesalers and
-    dealers are not listed (purchases are always saved as fully paid)."""
-    b = R.all_balances(db, "customer")
-    rep = _new("Outstanding / Baqayajat", "Customers who have to pay", ["ID", "Customer", "Phone", "Balance"], (3,))
-    for r in b["rows"]:
-        rep["rows"].append([r["id"], r["name"], r["phone"] or "", money(r["balance"])])
-    rep["rows"].append(["", "TOTAL TO RECEIVE", "", money(b["total"])])
+    """Outstanding: everyone who still owes the shop money - customers (credit sales) and persons who took
+    a cash loan. The two kinds are listed and totalled apart, then added once. Suppliers are not listed."""
+    o = R.outstanding(db)
+    rep = _new("Outstanding", "Money to be received", ["ID", "Type", "Name", "Phone", "Balance"], (4,))
+    for r in o["customers"]:
+        rep["rows"].append([r["id"], "Customer", r["name"], r["phone"] or "", money(r["balance"])])
+    rep["rows"].append(["", "", "CUSTOMER OUTSTANDING", "", money(o["customer_total"])])
     rep["bold_rows"].add(len(rep["rows"]) - 1)
-    rep["summary"] = [("Customers", str(len(b["rows"]))), ("Total to receive", money(b["total"]))]
+    if o["loans"]:
+        for r in o["loans"]:
+            rep["rows"].append([f"L-{r['id']}", "Cash Loan", r["name"], r["phone"] or "", money(r["balance"])])
+        rep["rows"].append(["", "", "CASH LOAN OUTSTANDING", "", money(o["loan_total"])])
+        rep["bold_rows"].add(len(rep["rows"]) - 1)
+    rep["rows"].append(["", "", "TOTAL TO RECEIVE", "", money(o["total"])])
+    rep["bold_rows"].add(len(rep["rows"]) - 1)
+    rep["summary"] = [("Customers", str(len(o["customers"]))), ("Total to receive", money(o["total"]))]
+    if o["loans"]:
+        rep["summary"] += [("Customer outstanding", money(o["customer_total"])),
+                           ("Cash loan outstanding", money(o["loan_total"]))]
     return rep
 
 

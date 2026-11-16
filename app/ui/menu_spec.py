@@ -9,7 +9,7 @@ HOME_BUTTONS = [
     ("Stock Purchase", "stock_purchase"),
     ("Cash Recovery", "cash_received"),
     ("Stock Report", "stock_position"),
-    ("Outstanding / Baqayajat", "outstanding"),
+    ("Outstanding", "outstanding"),
     ("Sale Summary", "sale_summary"),
     ("Profit Loss Report", "profit_loss"),
     ("Dashboard", "dashboard"),
@@ -29,6 +29,8 @@ MENUS = [
         ("Sale Return", "sale_return"),
         ("Products Purchase", "stock_purchase"),
         ("Purchase Return", "purchase_return"),
+        ("Purchase 2nd Hand Phone", "used_phone"),
+        ("2nd Hand Phone Purchase History", "used_phone_history"),
         ("Installments (Qist)", "qist"),
         ("Repair Jobs", "repairs"),
     ]),
@@ -66,6 +68,7 @@ MENUS = [
         ("Change Password / Username", "change_password"),
         ("Staff Accounts", "users"),
         ("Audit Log", "audit_log"),
+        ("Cash Loan", "cash_loan"),
         ("Printer Settings", "printer_settings"),
         ("License Activation", "license"),
         ("Reset Database", "reset_db"),
@@ -81,7 +84,7 @@ IMPLEMENTED = {"dashboard", "company_edit", "about", "change_password", "custome
                "cash_book", "balance_sheet", "vouchers", "sale_return", "purchase_return",
                "customer_transactions", "cash_received_report", "profit_loss", "invoice_wise", "stock_position",
                "product_ledger", "all_balances", "products_report", "outstanding", "sale_summary", "invoice_print",
-               "backup", "restore", "categories", "reset_db", "printer_settings", "imei_search", "daily_closing", "users", "audit_log", "import_data", "qist", "repairs", "qist_due", "price_list", "labels", "license"}
+               "backup", "restore", "categories", "reset_db", "printer_settings", "imei_search", "daily_closing", "users", "audit_log", "import_data", "qist", "repairs", "qist_due", "price_list", "labels", "license", "used_phone", "used_phone_history", "cash_loan"}
 
 
 def all_keys():

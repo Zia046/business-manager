@@ -56,6 +56,17 @@ def all_balances(db, kind="customer"):
     return {"rows": rows, "total": r2(sum(r["balance"] for r in rows))}
 
 
+def outstanding(db):
+    """Everything people owe the shop, kept apart so nothing is counted twice:
+    customers (credit sales) and persons who took a cash loan."""
+    from . import loans
+    cust = all_balances(db, "customer")
+    lo = loans.people(db, only_open=True)
+    loan_total = r2(sum(r["balance"] for r in lo))
+    return {"customers": cust["rows"], "customer_total": cust["total"], "loans": lo, "loan_total": loan_total,
+            "total": r2(cust["total"] + loan_total)}
+
+
 def stock_position(db):
     rows = db.query(
         "SELECT p.id, p.name, p.category, p.unit, p.avg_cost, p.sale_price, p.low_stock_level, "
@@ -116,8 +127,10 @@ def balance_sheet(db):
     stock = stock_position(db)["total_value"]
     recv = all_balances(db, "customer")["total"]
     pay = all_balances(db, "supplier")["total"]
-    assets, liabilities = r2(cash + stock + recv), r2(pay)
-    return {"cash": cash, "stock_value": stock, "receivables": recv, "total_assets": assets,
+    from . import loans
+    lent = loans.total_outstanding(db)               # cash lent to people is still ours: an asset
+    assets, liabilities = r2(cash + stock + recv + lent), r2(pay)
+    return {"cash": cash, "stock_value": stock, "receivables": recv, "cash_loans": lent, "total_assets": assets,
             "payables": pay, "total_liabilities": liabilities, "equity": r2(assets - liabilities)}
 
 
@@ -167,13 +180,14 @@ def imei_lookup(db, text, limit=200):
     like = f"%{text}%"
     return db.query(
         "SELECT s.id, s.serial, s.imei2, s.status, p.name AS product, pu.no AS purchase_no, pu.date AS purchase_date, "
-        "sup.name AS supplier, i.no AS invoice_no, i.date AS invoice_date, cu.name AS customer, cu.phone AS cphone, "
+        "COALESCE(up.seller_name || ' (2nd hand)', sup.name) AS supplier, i.no AS invoice_no, i.date AS invoice_date, cu.name AS customer, cu.phone AS cphone, "
         "(SELECT ii.price - ii.discount FROM invoice_items ii WHERE ii.invoice_id=s.invoice_id "
         "AND ii.serial=s.serial LIMIT 1) AS sold_price, "
         "(SELECT ii.warranty_months FROM invoice_items ii WHERE ii.invoice_id=s.invoice_id "
         "AND ii.serial=s.serial LIMIT 1) AS warranty_months "
         "FROM serials s JOIN products p ON p.id=s.product_id "
         "LEFT JOIN purchases pu ON pu.id=s.purchase_id LEFT JOIN parties sup ON sup.id=pu.party_id "
+        "LEFT JOIN used_phones up ON up.purchase_id=s.purchase_id AND up.imei1=s.serial "
         "LEFT JOIN invoices i ON i.id=s.invoice_id LEFT JOIN parties cu ON cu.id=i.party_id "
         "WHERE s.serial LIKE ? OR s.imei2 LIKE ? ORDER BY s.id DESC LIMIT ?", (like, like, limit))
 
@@ -210,8 +224,10 @@ def dashboard(db, today=None):
                       (a, b))
     n = db.scalar("SELECT COUNT(*) FROM invoices WHERE status='active' AND date BETWEEN ? AND ?", (a, b))
     stock = stock_position(db)["rows"]
+    from . import loans
+    recv, lent = all_balances(db, "customer")["total"], loans.total_outstanding(db)
     return {"today_sales": r2(sales), "today_invoices": n, "cash": cash_in_hand(db),
-            "receivable": all_balances(db, "customer")["total"],
+            "receivable": recv, "cash_loans": lent, "outstanding": r2(recv + lent),
             "low_stock": sum(1 for r in stock if r["low"]),
             "phones_in_stock": db.scalar("SELECT COUNT(*) FROM serials WHERE status='in_stock'"),
             "qist_overdue": db.scalar(

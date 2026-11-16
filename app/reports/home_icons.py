@@ -120,7 +120,19 @@ def gauge(size=96):
     return _fin(img, size)
 
 
-HOME_ICONS = {"sale_invoice": invoice, "stock_purchase": cart, "cash_received": hand_coins,
+def phone_plus(size=96):
+    """A phone with a '+': buying a second-hand phone."""
+    img, d, k = _canvas(size)
+    _rr(d, k, (20, 6, 66, 94), 9, WHITE, NAVY, 5)
+    _rr(d, k, (28, 18, 58, 74), 2, (70, 120, 200))
+    _ell(d, k, (38, 79, 48, 89), NAVY)
+    _ell(d, k, (54, 46, 98, 90), (37, 99, 235))
+    _line(d, k, [(76, 56), (76, 80)], WHITE, 7)
+    _line(d, k, [(64, 68), (88, 68)], WHITE, 7)
+    return _fin(img, size)
+
+
+HOME_ICONS = {"used_phone": phone_plus, "sale_invoice": invoice, "stock_purchase": cart, "cash_received": hand_coins,
               "stock_position": bars_up, "outstanding": people, "sale_summary": clipboard,
               "profit_loss": profit, "dashboard": gauge}
 
@@ -170,20 +182,46 @@ def _badge(color, symbol, size=48):
             _ell(d, k, (x0, y0, x1, y1), w)
         _rr(d, k, (36, 56, 70, 72), 4, w)
         _poly(d, k, [(50, 50), (62, 62), (38, 62)], color)
+    elif symbol == "phone_plus":
+        _rr(d, k, (26, 18, 58, 82), 7, w)
+        _rr(d, k, (31, 26, 53, 68), 2, color)
+        _ell(d, k, (38, 71, 46, 79), color)
+        _ell(d, k, (52, 44, 86, 78), w)
+        _line(d, k, [(69, 52), (69, 70)], color, 6)
+        _line(d, k, [(60, 61), (78, 61)], color, 6)
+    elif symbol == "bars":
+        for x, top in ((24, 56), (43, 40), (62, 24)):
+            _rr(d, k, (x, top, x + 14, 78), 2, w)
+    elif symbol == "bill":
+        _rr(d, k, (28, 18, 72, 82), 5, w)
+        for y in (34, 46, 58):
+            _line(d, k, [(37, y), (63, y)], color, 5)
+    elif symbol == "tools":
+        _line(d, k, [(28, 72), (66, 34)], w, 10)
+        _ell(d, k, (56, 20, 80, 44), w)
+        _ell(d, k, (64, 16, 84, 36), color)
     return _fin(img, size)
 
 
-BADGES = {"today_sales": ((46, 170, 70), "cart"), "cash": ((37, 99, 235), "wallet"),
-          "receivable": ((147, 70, 220), "people"), "low_stock": ((214, 96, 80), "box"),
-          "phones_in_stock": ((60, 160, 60), "phone"), "qist_overdue": ((150, 50, 200), "warn"),
-          "last_backup": ((40, 150, 230), "cloud")}
+# one colour per kind of information (the same colours as app/ui/theme.py)
+PALETTE = {"navy": (27, 42, 74), "red": (211, 47, 58), "green": (30, 142, 78), "gold": (217, 154, 6),
+           "cyan": (14, 159, 192), "purple": (90, 62, 200), "orange": (226, 98, 14), "teal": (20, 154, 128)}
+BADGES = {"today_sales": ("green", "cart"), "cash": ("gold", "wallet"),
+          "receivable": ("red", "people"), "low_stock": ("orange", "box"),
+          "phones_in_stock": ("cyan", "phone"), "qist_overdue": ("purple", "warn"),
+          "last_backup": ("teal", "cloud"), "used_phone": ("navy", "phone_plus"),
+          "sales": ("navy", "bars"), "bills": ("navy", "bill"), "repairs": ("purple", "tools")}
 
 
-def warm(img: Image.Image) -> Image.Image:
-    """One consistent look for every icon: navy -> blue -> white scale (alpha kept)."""
+def _mix(a, b, t):
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+
+
+def warm(img: Image.Image, color=(37, 99, 235)) -> Image.Image:
+    """One consistent look for an icon: dark shade -> the colour -> white (alpha kept)."""
     from PIL import ImageOps
     rgba = img.convert("RGBA")
-    tinted = ImageOps.colorize(rgba.convert("L"), black=(30, 41, 59), mid=(37, 99, 235), white=(255, 255, 255),
+    tinted = ImageOps.colorize(rgba.convert("L"), black=_mix(color, (0, 0, 0), 0.55), mid=color, white=(255, 255, 255),
                                blackpoint=20, whitepoint=235, midpoint=110).convert("RGBA")
     tinted.putalpha(rgba.getchannel("A"))
     return tinted
@@ -195,13 +233,17 @@ def png(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-def home_icon_png(key: str, size=96) -> bytes:
-    return png(warm(HOME_ICONS[key](size)))
+def home_icon_png(key: str, size=96, color=(37, 99, 235)) -> bytes:
+    """The big picture of a home button, drawn in the button's own colour."""
+    return png(warm(HOME_ICONS[key](size), color))
 
 
-def badge_png(key: str, size=48) -> bytes:
-    color, sym = BADGES[key]
-    return png(warm(_badge(color, sym, size)))
+def badge_png(key: str, size=48, color=None, on_color=False) -> bytes:
+    """Small round icon. Normal: coloured disc with a white symbol. on_color=True (for a card that is itself
+    coloured): a lighter disc of the same colour, so the symbol stays readable on the card."""
+    name, sym = BADGES[key]
+    base = PALETTE[name] if color is None else PALETTE.get(color, color)
+    return png(_badge(_mix(base, (255, 255, 255), 0.28) if on_color else base, sym, size))
 
 
 def arrow_png(color, size=40) -> bytes:

@@ -47,6 +47,31 @@ CREATE TABLE IF NOT EXISTS repairs (
         CHECK (status IN ('received','in_progress','ready','delivered','cancelled')),
     delivered_date TEXT, note TEXT
 );
+
+CREATE TABLE IF NOT EXISTS used_phones (             -- second-hand phones bought from a person
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    no TEXT NOT NULL UNIQUE, date TEXT NOT NULL,
+    seller_name TEXT NOT NULL, cnic TEXT, address TEXT, phone TEXT,
+    model TEXT NOT NULL, model_no TEXT,
+    imei1 TEXT NOT NULL, imei2 TEXT,
+    price REAL NOT NULL,                             -- cash paid to the seller
+    sale_price REAL NOT NULL DEFAULT 0,              -- the price we want to sell it for
+    purchase_id INTEGER, product_id INTEGER, note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_used_phones_date ON used_phones(date);
+
+CREATE TABLE IF NOT EXISTS loan_people (             -- persons who took a cash loan from the shop
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL, cnic TEXT, phone TEXT, address TEXT
+);
+CREATE TABLE IF NOT EXISTS loan_entries (            -- balance of a person = loans - repayments - adjustments
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id INTEGER NOT NULL REFERENCES loan_people(id),
+    date TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('loan','repayment','adjustment')),
+    amount REAL NOT NULL CHECK (amount > 0), note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_loan_entries_person ON loan_entries(person_id);
 """
 
 SCHEMA_SQL = """
@@ -219,7 +244,7 @@ CREATE UNIQUE INDEX idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL;
 
 SCHEMA_SQL += V3_TABLES
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def migrate(conn):
