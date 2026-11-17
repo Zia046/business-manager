@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths: ["android/**", ".github/workflows/android.yml"]
 
+permissions:
+  contents: write              # to put the APK on the Releases page
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -32,3 +35,13 @@ jobs:
         with:
           name: BurhanNexusCompanion-apk
           path: BurhanNexusCompanion.apk
+
+      # the newest APK always at one fixed address (Releases page), easy to open on the phone
+      - name: Publish on the Releases page
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: companion-latest
+          name: Burhan Nexus Business Companion (Android app, latest)
+          body: Install BurhanNexusCompanion.apk on your Android phone. This file is replaced by every new build.
+          files: BurhanNexusCompanion.apk
+          make_latest: false
