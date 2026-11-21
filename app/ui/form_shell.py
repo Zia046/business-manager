@@ -112,9 +112,10 @@ class TwoColumnForm:
                 item = form.itemAt(i, QFormLayout.LabelRole)
                 lab = item.widget() if item else None
                 if isinstance(lab, QLabel) and lab.text():
-                    lab.setWordWrap(True)
-                    lab.setMaximumWidth(210)
-                    lab.setMinimumWidth(min(lab.sizeHint().width(), 120))
+                    one_line = lab.sizeHint().width()
+                    lab.setWordWrap(True)               # only labels longer than ~170 px use two lines
+                    lab.setMinimumWidth(min(one_line, 170))
+                    lab.setMaximumWidth(max(min(one_line, 170), 120))
                 field = form.itemAt(i, QFormLayout.FieldRole)
                 w = field.widget() if field else None
                 if w is not None and not isinstance(w, (QLabel, QPushButton)):
