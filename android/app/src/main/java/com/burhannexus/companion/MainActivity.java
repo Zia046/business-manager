@@ -98,6 +98,9 @@ public class MainActivity extends Activity implements Sync.Listener {
         page.addView(nav("Send SMS Reminders", ReminderActivity.class), Ui.lp(this, 8));
         page.addView(nav("SMS Template Settings", TemplateActivity.class), Ui.lp(this, 8));
         page.addView(nav("Connection with Computer", ConnectActivity.class), Ui.lp(this, 8));
+        TextView ver = Ui.text(this, "App version " + App.BuildConfigInfo.version(this), 12, Ui.MUTED, false);
+        ver.setGravity(Gravity.CENTER);
+        page.addView(ver, Ui.lp(this, 14));
     }
 
     private final java.util.Map<String, TextView> tileValues = new java.util.HashMap<>();
@@ -155,6 +158,20 @@ public class MainActivity extends Activity implements Sync.Listener {
     @Override
     protected void onResume() {
         super.onResume();
+        String crash = App.takeCrash(this);
+        if (crash != null) {                                  // the app closed last time: show why
+            final String text = crash;
+            new android.app.AlertDialog.Builder(this).setTitle("The app closed because of an error")
+                    .setMessage("Please send a screenshot of this to the developer.\n\n"
+                            + (text.length() > 2500 ? text.substring(0, 2500) : text))
+                    .setPositiveButton("Copy", (d, w) -> {
+                        android.content.ClipboardManager cb = (android.content.ClipboardManager)
+                                getSystemService(Context.CLIPBOARD_SERVICE);
+                        cb.setPrimaryClip(android.content.ClipData.newPlainText("error", text));
+                        Ui.toast(this, "Copied. Paste it in WhatsApp to the developer.");
+                    })
+                    .setNegativeButton("Close", null).show();
+        }
         Sync.addListener(this);
         render();
         handler.removeCallbacks(tick);

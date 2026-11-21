@@ -61,6 +61,17 @@ jobs:
           name: KeyGenerator
           path: dist/KeyGenerator.exe
 
+      # the newest installer always at one fixed address (Releases page), no GitHub login needed
+      - name: Publish the installer on the Releases page
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-latest
+          name: Burhan Nexus Business Manager (Windows, latest)
+          body: Download BusinessManager-Setup.exe and run it. Your data is kept. This file is replaced by every new build.
+          files: installer_output/BusinessManager-Setup.exe
+          make_latest: true
+
       - name: Attach installer to the GitHub Release (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2

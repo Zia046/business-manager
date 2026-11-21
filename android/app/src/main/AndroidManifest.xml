@@ -8,6 +8,7 @@
     <!-- Local Wi-Fi only. The traffic is plain HTTP on the LAN, but every request and answer is encrypted by
          the app itself (AES-256-GCM with the key made at pairing), so cleartext HTTP carries no readable data. -->
     <application
+        android:name=".App"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
