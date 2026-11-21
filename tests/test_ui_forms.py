@@ -5,15 +5,21 @@ does not resize or move the window, that Esc / Enter do not close it, and that s
 Screenshots go to the folder in UI_SHOTS (if set)."""
 import json
 import os
-import tempfile
 
 import pytest
 
-_cfg = os.path.join(tempfile.gettempdir(), "bm_offscreen_screen.json")
-with open(_cfg, "w") as f:   # a typical Windows 10 laptop screen (1366 x 768, 40 px task bar)
+# a typical Windows 10 laptop screen (1366 x 768). The file name is given without a drive letter: Qt splits
+# the platform setting at ':' so "C:\\..." would break it.
+_cfg = "bm_offscreen_screen.json"           # in the folder the tests run from (same drive, short path)
+with open(_cfg, "w") as f:
     json.dump({"screens": [{"name": "laptop", "x": 0, "y": 0, "width": 1366, "height": 768,
                             "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}, f)
-os.environ.setdefault("QT_QPA_PLATFORM", f"offscreen:configfile={_cfg}")
+try:
+    _rel = os.path.relpath(_cfg).replace("\\", "/")
+except ValueError:                      # temp folder on another drive
+    _rel = None
+os.environ.setdefault("QT_QPA_PLATFORM", f"offscreen:configfile={_rel}" if _rel and ":" not in _rel else "offscreen")
+os.environ.setdefault("QT_FORCE_STDERR_LOGGING", "1")     # Qt messages into the log, also on Windows
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 from PySide6.QtCore import QPoint, Qt  # noqa: E402

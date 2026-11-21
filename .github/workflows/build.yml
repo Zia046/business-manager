@@ -26,7 +26,7 @@ jobs:
       - name: Run tests
         env:
           UI_SHOTS: ui_shots              # screenshots of the data-entry windows, made by tests/test_ui_forms.py
-        run: python -m pytest -q -rs
+        run: python -X faulthandler -m pytest -q -rs
 
       - name: Publish the window screenshots (for checking the layout)
         if: github.ref == 'refs/heads/main' && hashFiles('ui_shots/*.png') != ''

@@ -13,3 +13,6 @@ installer_output/
 
 android/.gradle/
 android/local.properties
+
+bm_offscreen_screen.json
+ui_shots/
