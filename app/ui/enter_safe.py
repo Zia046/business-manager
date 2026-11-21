@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QAbstractButton, QDialog, QPlainTextEdit, QPushBut
 
 
 class EnterSafeDialog(QDialog):
+    escape_closes = True        # data-entry forms set False: Esc must not throw away what was typed
     def showEvent(self, event):
         for b in self.findChildren(QPushButton):
             b.setAutoDefault(False)
@@ -22,5 +23,8 @@ class EnterSafeDialog(QDialog):
             elif not isinstance(w, (QPlainTextEdit, QTextEdit)):
                 self.focusNextChild()
             event.accept()
+            return
+        if event.key() == Qt.Key_Escape and not self.escape_closes:
+            event.accept()                      # close with the Cancel / Close button (or the window's X)
             return
         super().keyPressEvent(event)

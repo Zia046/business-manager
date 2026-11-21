@@ -1,23 +1,17 @@
 """Purchase 2nd Hand Phone: the entry form, and the purchase history with the details of each phone."""
 from PySide6.QtCore import QDate
-from PySide6.QtWidgets import (QDateEdit, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QMessageBox, QPushButton, QVBoxLayout)
+from PySide6.QtWidgets import (QDateEdit, QDialog, QDoubleSpinBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+                               QPushButton, QVBoxLayout)
 
 from ..config import APP_NAME
 from ..services import phones, used_phones
 from ..services.common import BusinessError
 from .enter_safe import EnterSafeDialog
+from .form_shell import TwoColumnForm, section
 from .payments_ui import _stamp
 from .phone_fields import PhoneFields
-from .theme import C_GREEN, C_RED, NAVY
+from .theme import C_GREEN, C_RED
 from .widgets import make_table, money, set_row
-
-
-def _head(text):
-    lab = QLabel(text)
-    lab.setStyleSheet(f"font-size: 15px; font-weight: 800; color: {NAVY}; padding: 6px 0 2px 8px; "
-                      f"border-left: 4px solid {C_RED};")
-    return lab
 
 
 def _amount_box():
@@ -35,38 +29,22 @@ class UsedPhoneDialog(EnterSafeDialog):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Purchase 2nd Hand Phone")
-        self.setMinimumWidth(560)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(26, 20, 26, 20)
-        lay.setSpacing(8)
+        self.escape_closes = False
+        shell = TwoColumnForm(self, width=980)
+        left, right = shell.left, shell.right
 
-        lay.addWidget(_head("Customer / Seller Information"))
-        f1 = QFormLayout()
+        # left column: who sold it, and what was paid
+        left.addRow(section("Customer / Seller Information"))
         self.seller = QLineEdit()
         self.cnic = QLineEdit(placeholderText="13 digits, e.g. 15101-1234567-1")
         self.address = QLineEdit()
         self.phone = QLineEdit(placeholderText="e.g. 03xx-xxxxxxx")
-        f1.addRow("Customer Name *", self.seller)
-        f1.addRow("CNIC Number", self.cnic)
-        f1.addRow("Address", self.address)
-        f1.addRow("Mobile Number", self.phone)
-        lay.addLayout(f1)
+        left.addRow("Customer Name *", self.seller)
+        left.addRow("CNIC Number", self.cnic)
+        left.addRow("Address", self.address)
+        left.addRow("Mobile Number", self.phone)
 
-        lay.addWidget(_head("Mobile Phone Information"))
-        f2 = QFormLayout()
-        self.model = QLineEdit(placeholderText="e.g. Infinix Hot 40")
-        self.model_no = QLineEdit(placeholderText="e.g. X6836")
-        self.imei1 = QLineEdit(placeholderText="Compulsory - type or scan")
-        self.imei2 = QLineEdit(placeholderText="Optional - leave empty if the phone has one IMEI")
-        f2.addRow("Purchased Mobile Model *", self.model)
-        f2.addRow("Model Number", self.model_no)
-        self.spec = PhoneFields(f2)                 # Mobile Type, RAM (GB), Storage (GB)
-        f2.addRow("IMEI Number 1 *", self.imei1)
-        f2.addRow("IMEI Number 2", self.imei2)
-        lay.addLayout(f2)
-
-        lay.addWidget(_head("Purchase Information"))
-        f3 = QFormLayout()
+        left.addRow(section("Purchase Information"))
         self.price = _amount_box()
         self.sale_price = _amount_box()
         self.date = QDateEdit(QDate.currentDate())
@@ -74,32 +52,32 @@ class UsedPhoneDialog(EnterSafeDialog):
         self.date.setDisplayFormat("dd-MM-yyyy")
         self.margin = QLabel("")
         self.margin.setObjectName("subtitle")
-        f3.addRow("Purchase Price (cash paid) *", self.price)
-        f3.addRow("Sale Price", self.sale_price)
-        f3.addRow("", self.margin)
-        f3.addRow("Purchase Date", self.date)
-        lay.addLayout(f3)
+        left.addRow("Purchase Price (cash paid) *", self.price)
+        left.addRow("Sale Price", self.sale_price)
+        left.addRow("", self.margin)
+        left.addRow("Purchase Date", self.date)
         self.price.valueChanged.connect(self._show_margin)
         self.sale_price.valueChanged.connect(self._show_margin)
 
-        self.error = QLabel("")
-        self.error.setObjectName("error")
-        self.error.setWordWrap(True)
-        lay.addWidget(self.error)
-        row = QHBoxLayout()
-        hist = QPushButton("Purchase History")
-        hist.setObjectName("secondary")
-        hist.clicked.connect(lambda: UsedPhoneHistory(self.db, self).exec())
-        close = QPushButton("Close")
-        close.setObjectName("secondary")
-        close.clicked.connect(self.reject)
-        save = QPushButton("Save Purchase")
-        save.clicked.connect(self.save)
-        row.addWidget(hist)
-        row.addStretch()
-        row.addWidget(close)
-        row.addWidget(save)
-        lay.addLayout(row)
+        # right column: the phone itself
+        right.addRow(section("Mobile Phone Information"))
+        self.model = QLineEdit(placeholderText="e.g. Infinix Hot 40")
+        self.model_no = QLineEdit(placeholderText="e.g. X6836")
+        self.imei1 = QLineEdit(placeholderText="Compulsory - type or scan")
+        self.imei2 = QLineEdit(placeholderText="Optional - leave empty if the phone has one IMEI")
+        right.addRow("Purchased Mobile Model *", self.model)
+        right.addRow("Model Number", self.model_no)
+        self.spec = PhoneFields(right)              # Mobile Type, RAM (GB), Storage (GB)
+        right.addRow("IMEI Number 1 *", self.imei1)
+        right.addRow("IMEI Number 2", self.imei2)
+
+        # fixed footer: always visible, whatever the screen size
+        self.error = shell.error
+        shell.button("Purchase History", lambda: UsedPhoneHistory(self.db, self).exec(), left=True)
+        shell.button("Close", self.reject)
+        shell.button("Save Purchase", self.save, primary=True)
+        shell.fit()
+        self.seller.setFocus()
 
     def _show_margin(self, *_):
         buy, sell = self.price.value(), self.sale_price.value()

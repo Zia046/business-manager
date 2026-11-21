@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QSpinBox, QFo
 from ..services import masters, reports
 from ..services.common import BusinessError, is_owner
 from .barcode_print import BarcodePrintDialog, ensure_barcode
+from .enter_safe import EnterSafeDialog
+from .form_shell import TwoColumnForm, section
 from .phone_fields import PhoneFields
 from .widgets import make_table, money, selected_id, set_row
 
@@ -19,18 +21,16 @@ def _spin(value=0.0, decimals=2):
     return s
 
 
-class ProductForm(QDialog):
+class ProductForm(EnterSafeDialog):
     def __init__(self, db, product=None, parent=None):
         super().__init__(parent)
         self.db, self.product = db, product
         self.saved_id = None
         self.setWindowTitle("Edit Product" if product else "New Product")
-        self.setMinimumWidth(480)
+        self.escape_closes = False
         p = product or {}
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(26, 22, 26, 22)
-        form = QFormLayout()
-        form.addRow("ID", QLabel(str(p["id"]) if product else "Auto (system generated)"))
+        shell = TwoColumnForm(self, width=940)
+        left, right = shell.left, shell.right
         self.name = QLineEdit(p.get("name", ""))
 
         # a category must always be chosen from the list (Utilities/New Account > Categories adds more)
@@ -62,54 +62,57 @@ class ProductForm(QDialog):
             self.opening.setEnabled(False)
             self.purchase.setToolTip("Current purchase rate. Changing it does not change saved invoices, "
                                      "purchases or their profit; it is used from now on.")
-        self.form = form
+        self.form = left                            # the phone-only rows live in the left column
         self.brand = QLineEdit(p.get("brand") or "", placeholderText="e.g. Infinix, Samsung, Nokia")
         self.condition = QComboBox()
         self.condition.addItem("New", "new")
         self.condition.addItem("Used", "used")
         self.condition.setCurrentIndex(1 if p.get("condition") == "used" else 0)
-        form.addRow("Name *", self.name)
-        form.addRow("Category *", self.category)
-        form.addRow("Brand", self.brand)
+
+        # left column: what the product is
+        left.addRow(section("Product"))
+        left.addRow("ID", QLabel(str(p["id"]) if product else "Auto (system generated)"))
+        left.addRow("Name *", self.name)
+        left.addRow("Category *", self.category)
+        left.addRow("Brand", self.brand)
         # phones: Smartphone needs RAM + Storage (numbers only), Keypad hides both
-        self.phone = PhoneFields(form, p.get("mobile_type"), p.get("ram_gb"), p.get("storage_gb"),
+        self.phone = PhoneFields(left, p.get("mobile_type"), p.get("ram_gb"), p.get("storage_gb"),
                                  allow_unknown=bool(product) and not p.get("mobile_type"))
-        form.addRow("Condition", self.condition)
-        form.addRow("IMEI type", self.imei_mode)
-        form.addRow("Hash tags", self.tags)
-        form.addRow("Unit", self.unit)
+        left.addRow("Condition", self.condition)
+        left.addRow("IMEI type", self.imei_mode)
+        left.addRow("Hash tags", self.tags)
+
+        # right column: prices, stock and labels
+        right.addRow(section("Price & Stock"))
+        right.addRow("Unit", self.unit)
         if is_owner():
-            form.addRow("Purchase Rate" if product else "Purchase Price", self.purchase)
-        form.addRow("Sale Price", self.sale)
-        form.addRow("Opening Stock", self.opening)
-        form.addRow("Low-stock alert at", self.low)
-        form.addRow("Warranty on sale", self.warranty)
+            right.addRow("Purchase Rate" if product else "Purchase Price", self.purchase)
+        right.addRow("Sale Price", self.sale)
+        right.addRow("Opening Stock", self.opening)
+        right.addRow("Low-stock alert at", self.low)
+        right.addRow("Warranty on sale", self.warranty)
         gen = QPushButton("Generate Barcode")
         gen.setObjectName("secondary")
         gen.setAutoDefault(False)
         gen.setToolTip("Makes a new random number (8 digits) that no other product has")
         gen.clicked.connect(self._generate_barcode)
-        brow = QHBoxLayout()
-        brow.addWidget(self.barcode, 1)
-        brow.addWidget(gen)
-        form.addRow("Barcode", brow)
-        lay.addLayout(form)
+        right.addRow("Barcode", self.barcode)
+        right.addRow("", gen)
+
         self.hint = QLabel("")
         self.hint.setObjectName("subtitle")
         self.hint.setWordWrap(True)
-        lay.addWidget(self.hint)
-        self.error = QLabel("")
-        self.error.setObjectName("error")
-        self.error.setWordWrap(True)
-        lay.addWidget(self.error)
-        save = QPushButton("Save")
-        save.setDefault(True)
-        save.clicked.connect(self.save)
-        lay.addWidget(save)
+        shell.note(self.hint)
+        # fixed footer: Cancel and Save are always visible
+        self.error = shell.error
+        shell.button("Cancel", self.reject)
+        shell.button("Save", self.save, primary=True)
         self.category.currentIndexChanged.connect(self._category_changed)
         self._category_changed()
         if product and masters.db_has_imei(db, product["id"]):
             self.imei_mode.setEnabled(False)       # cannot switch single/double once IMEI numbers exist
+        shell.fit()
+        self.name.setFocus()
 
     def _is_mobile(self) -> bool:
         return self.category.currentData() == 1

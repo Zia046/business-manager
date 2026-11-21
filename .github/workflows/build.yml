@@ -24,7 +24,20 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: python -m pytest -q
+        env:
+          UI_SHOTS: ui_shots              # screenshots of the data-entry windows, made by tests/test_ui_forms.py
+        run: python -m pytest -q -rs
+
+      - name: Publish the window screenshots (for checking the layout)
+        if: github.ref == 'refs/heads/main' && hashFiles('ui_shots/*.png') != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ui-screenshots
+          name: Window screenshots (automatic check, not a download for users)
+          body: Made by the automatic tests on every build. Not needed by users.
+          prerelease: true
+          make_latest: false
+          files: ui_shots/*.png
 
       - name: Build the program (folder version, starts fast)
         run: >
