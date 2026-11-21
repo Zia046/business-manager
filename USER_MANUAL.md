@@ -223,3 +223,10 @@ Phone par Outstanding dekhne aur payment reminder bhejne ke liye. Data computer 
 - **Phones in Stock > Delete:** tasdeeq aur wajah likhne ke baad phone stock se nikal jata hai (galti se entry, gum ya kharab). Paisa nahi hilta; record stock ledger aur audit log mein rehta hai. Supplier ko wapas karna ho to **Purchase Return** use karein.
 - **Low Stock:** mobile phones ab kabhi Low Stock mein nahi aate (0 ya 1 phone bhi ho). Accessories waghera apni had ke mutabiq aate rehte hain.
 - **Android app (version 2.1):** home par naya "Business" hissa: Stock Position, Mobile in Hand, Sales Overview, Purchase Overview, Financial Overview, Recent Activity. Har page par "Refresh / Sync now" aur aakhri sync ka waqt; computer na mile to **OFFLINE** likha aata hai aur pichhle figures dikhte hain. Computer par naya Business Manager aur phone par nayi app dono install karein.
+
+## Product aur 2nd Hand Phone ki windows (naya layout)
+- **Purchase 2nd Hand Phone**, **New Product** aur **Edit Product** ab do column mein hain: baen taraf seller/product ki maloomat, daen taraf phone/qeemat ki maloomat.
+- **Save / Cancel (ya Close)** hamesha neechay nazar aate hain. Screen chhoti ho to sirf beech ka hissa upar-neechay scroll hota hai.
+- Category ya Mobile Type badalne par window ka size aur jagah nahi badalti.
+- **Esc** dabane se ab yeh windows band nahi hoti (likha hua data zaya nahi hota). Band karne ke liye Cancel/Close ya X dabayein.
+- Product window mein **Enter** ab agle khane par le jata hai, seedha Save nahi karta (barcode scan ke baad bhi). Save ke liye Save button dabayein.
