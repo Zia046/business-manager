@@ -216,3 +216,10 @@ Phone par Outstanding dekhne aur payment reminder bhejne ke liye. Data computer 
 ## Outstanding ka naam aur naye rang
 - "Outstanding / Baqayajat" ab har jagah sirf **Outstanding** hai.
 - Home aur Dashboard par naya colour theme: dark navy menu, safaid/halka grey background, aur har qisam ki maloomat ka apna rang (sabz = sale/profit, sunehra = cash, surkh = wajib-ul-ada raqam, naranji = low stock, cyan/purple = maloomat). Layout aur buttons ki jagah wohi hai.
+
+## Purchase Rate edit, Phones in Stock edit/delete, Low Stock aur app ke naye hissay
+- **Purchase Rate:** Products > Edit mein ab **Purchase Rate** badla ja sakta hai (sirf owner). Naya rate stock ki qeemat, aglay sale ke profit aur aglay purchase ke suggested price mein lagta hai. Pehle ke invoices, purchases aur un ka profit bilkul nahi badalte.
+- **Phones in Stock > Edit:** Brand, Model, Type, RAM, Storage, Condition, IMEI 1/2, Purchase Rate aur Selling Price theek karein. Agar isi model ke aur phones bhi hain to sirf yeh phone apni alag line mein chala jata hai, baqi waisay hi rehte hain.
+- **Phones in Stock > Delete:** tasdeeq aur wajah likhne ke baad phone stock se nikal jata hai (galti se entry, gum ya kharab). Paisa nahi hilta; record stock ledger aur audit log mein rehta hai. Supplier ko wapas karna ho to **Purchase Return** use karein.
+- **Low Stock:** mobile phones ab kabhi Low Stock mein nahi aate (0 ya 1 phone bhi ho). Accessories waghera apni had ke mutabiq aate rehte hain.
+- **Android app (version 2.1):** home par naya "Business" hissa: Stock Position, Mobile in Hand, Sales Overview, Purchase Overview, Financial Overview, Recent Activity. Har page par "Refresh / Sync now" aur aakhri sync ka waqt; computer na mile to **OFFLINE** likha aata hai aur pichhle figures dikhte hain. Computer par naya Business Manager aur phone par nayi app dono install karein.

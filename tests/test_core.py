@@ -2234,3 +2234,206 @@ def test_new_update_screens_are_wired():
     assert permissions.can_open("staff", "phone_stock")                   # staff may look up phones (no cost shown)
     for key in ("mobile_app", "sms_template"):
         assert permissions.can_open("owner", key) and not permissions.can_open("staff", key)
+
+
+from app.services import phones as PH  # noqa: E402  (a fixture is also called "phones")
+
+
+# ---------- purchase rate is editable; history keeps its own prices ----------
+def test_purchase_rate_can_be_edited_without_changing_history(shop):
+    db, sup, cust, _ = shop
+    cover = masters.add_product(db, "Back Cover", sale_price=500, purchase_price=200, opening_stock=0,
+                                category="Accessories")
+    pur = trading.create_purchase(db, sup, [{"product_id": cover, "qty": 10, "price": 200}], paid=2000)
+    inv = trading.create_invoice(db, cust, [{"product_id": cover, "qty": 2, "price": 500}], paid=1000)
+    assert trading.invoice_profit(db, inv) == 600
+    pl_before = reports.profit_loss(db, "2000-01-01", "2100-01-01")
+    masters.update_product(db, cover, purchase_price=260)                   # the rate is corrected afterwards
+    p = db.one("SELECT avg_cost, last_purchase_price FROM products WHERE id=?", (cover,))
+    assert (p["avg_cost"], p["last_purchase_price"]) == (260, 260)
+    # saved documents and their profit are unchanged
+    assert trading.invoice_profit(db, inv) == 600
+    assert db.one("SELECT unit_cost FROM invoice_items WHERE invoice_id=?", (inv,))["unit_cost"] == 200
+    assert db.one("SELECT price FROM purchase_items WHERE purchase_id=?", (pur,))["price"] == 200
+    assert reports.purchase_detail(db, pur)["purchase"]["total"] == 2000
+    assert reports.profit_loss(db, "2000-01-01", "2100-01-01") == pl_before
+    # from now on the new rate is used: stock value, the next sale's profit, the next purchase's suggestion
+    row = [r for r in reports.stock_position(db)["rows"] if r["id"] == cover][0]
+    assert row["qty"] == 8 and row["value"] == 8 * 260
+    inv2 = trading.create_invoice(db, cust, [{"product_id": cover, "qty": 1, "price": 500}], paid=500)
+    assert trading.invoice_profit(db, inv2) == 240
+    for bad in (-1, "abc"):
+        with pytest.raises(BusinessError):
+            masters.update_product(db, cover, purchase_price=bad)
+    assert db.one("SELECT avg_cost FROM products WHERE id=?", (cover,))["avg_cost"] == 260
+    masters.update_product(db, cover, purchase_price=260, sale_price=550)   # same rate + other change is fine
+    assert db.scalar("SELECT COUNT(*) FROM audit_log WHERE action='Product edited' AND detail LIKE '%purchase_price=260%'") >= 1
+
+
+# ---------- mobile phones never appear in Low Stock ----------
+def test_low_stock_never_lists_mobile_phones(shop):
+    from app.reports import builders as B
+    db, sup, cust, _ = shop
+    phone = masters.add_product(db, "Tecno Spark 20", 30000, category="Mobile Phone", low_stock_level=5,
+                                mobile_type="smartphone", ram_gb=8, storage_gb=128)
+    keypad = masters.add_product(db, "Nokia 105", 3500, category="Mobile Phone", low_stock_level=3, mobile_type="keypad")
+    charger = masters.add_product(db, "Charger", 800, category="Accessories", low_stock_level=5)
+    cable = masters.add_product(db, "Cable", 300, category="Accessories", low_stock_level=0)
+    plenty = masters.add_product(db, "Glass", 200, category="Accessories", low_stock_level=2)
+    trading.create_purchase(db, sup, [{"product_id": phone, "qty": 1, "price": 25000, "serials": [P1]},
+                                      {"product_id": charger, "qty": 3, "price": 400},
+                                      {"product_id": plenty, "qty": 9, "price": 50}], paid=26650)
+    low = {r["name"] for r in reports.stock_position(db)["rows"] if r["low"]}
+    assert "Charger" in low and "Cable" in low                            # accessories keep their own rule
+    assert "Glass" not in low and "Tecno Spark 20" not in low and "Nokia 105" not in low   # 1 phone / 0 phones
+    rep = B.low_stock_report(db)
+    names = {r[1] for r in rep["rows"]}
+    assert names >= {"Charger", "Cable"} and not names & {"Tecno Spark 20", "Nokia 105"}
+    assert reports.dashboard(db)["low_stock"] == len(names)
+    assert not {r["name"] for r in reports.dashboard_extras(db)["low_items"]} & {"Tecno Spark 20", "Nokia 105"}
+    assert not {r["name"] for r in reports.dashboard_lists(db)["low_stock"]} & {"Tecno Spark 20", "Nokia 105"}
+    assert reports.is_low({"track_serial": 0, "low_stock_level": 2}, 2) and not reports.is_low(
+        {"track_serial": 1, "low_stock_level": 2}, 0)
+
+
+# ---------- Phones in Stock: edit and delete ----------
+def _phone_stock(db, sup):
+    smart = masters.add_product(db, "Note 40 Pro", 29000, category="Mobile Phone", mobile_type="smartphone",
+                                ram_gb=8, storage_gb=256, brand="Infinix")
+    trading.create_purchase(db, sup, [{"product_id": smart, "qty": 3, "price": 25000, "serials": [P1, P2, P3]}],
+                            paid=75000)
+    return smart, {r["imei1"]: r for r in PH.in_stock(db)}
+
+
+def test_edit_a_phone_that_shares_its_line_moves_it_alone(shop):
+    db, sup, cust, _ = shop
+    smart, rows = _phone_stock(db, sup)
+    inv = trading.create_invoice(db, cust, [{"product_id": smart, "qty": 1, "price": 29000, "serial": P3}], paid=29000)
+    value_before = reports.stock_position(db)["total_value"]
+    msg = PH.edit_phone(db, rows[P1]["serial_id"], "Note 40 Pro", P1, 24000, 28000, imei2=U3, brand="Infinix",
+                            mobile_type="smartphone", ram_gb=12, storage_gb=256, condition="used")
+    assert "ram_gb: 8 -> 12" in msg and "purchase rate: 25000 -> 24000" in msg
+    now_ = {r["imei1"]: r for r in PH.in_stock(db)}
+    a, b = now_[P1], now_[P2]
+    assert (a["ram_gb"], a["storage_gb"], a["condition"], a["imei2"]) == (12, 256, "used", U3)
+    assert (a["purchase_price"], a["sale_price"]) == (24000, 28000)
+    assert (b["ram_gb"], b["purchase_price"], b["sale_price"], b["condition"]) == (8, 25000, 29000, "new")   # untouched
+    assert a["product_id"] != smart and b["product_id"] == smart
+    assert db.one("SELECT imei_mode FROM products WHERE id=?", (a["product_id"],))["imei_mode"] == "double"
+    assert stock_qty(db.conn, smart) == 1 and stock_qty(db.conn, a["product_id"]) == 1
+    assert reports.dashboard(db)["phones_in_stock"] == 2
+    assert reports.stock_position(db)["total_value"] == value_before - 1000      # 25,000 -> 24,000
+    # the sold phone, its invoice and the purchase keep their own prices and names
+    assert trading.invoice_profit(db, inv) == 4000
+    assert db.one("SELECT product_id FROM serials WHERE serial=?", (P3,))["product_id"] == smart
+    assert db.one("SELECT price FROM purchase_items WHERE product_id=?", (smart,))["price"] == 25000
+    # sold later through the normal invoice: profit uses the corrected rate
+    inv2 = trading.create_invoice(db, cust, [{"product_id": a["product_id"], "qty": 1, "price": 28000,
+                                              "serial": P1, "serial2": U3}], paid=28000)
+    assert trading.invoice_profit(db, inv2) == 4000
+    # the phone ledger explains the move
+    kinds = [m["ref_type"] for m in reports.product_ledger(db, smart)["rows"]]
+    assert "phone_edit" in kinds
+
+
+def test_edit_a_phone_alone_in_its_line_and_validation(shop):
+    db, sup, cust, _ = shop
+    from app.services import used_phones
+    rid = _used(db, U1, price=20000, sale=26000, mobile_type="smartphone", ram_gb=4, storage_gb=64)
+    up = used_phones.detail(db, rid)
+    row = {r["imei1"]: r for r in PH.in_stock(db)}[U1]
+    PH.edit_phone(db, row["serial_id"], "Infinix Hot 40 Pro", U2, 21000, 27000, brand="Infinix",
+                      mobile_type="smartphone", ram_gb=8, storage_gb=128, condition="used")
+    p = db.one("SELECT * FROM products WHERE id=?", (up["product_id"],))           # its own line is corrected
+    assert (p["name"], p["ram_gb"], p["storage_gb"], p["avg_cost"], p["sale_price"]) == ("Infinix Hot 40 Pro", 8, 128, 21000, 27000)
+    up2 = used_phones.detail(db, rid)                                              # 2nd-hand record follows the IMEI
+    assert up2["imei1"] == U2 and up2["status"] == "In stock" and up2["sale_price"] == 27000
+    sid = row["serial_id"]
+    for bad in (dict(name=" "), dict(imei1="12x"), dict(purchase_rate=-5), dict(sale_price=-1),
+                dict(imei1=U2, imei2=U2), dict(ram_gb=0)):
+        args = {"name": "X", "imei1": U2, "purchase_rate": 1, "sale_price": 1, "mobile_type": "smartphone",
+                "ram_gb": 8, "storage_gb": 128, **bad}
+        with pytest.raises(BusinessError):
+            PH.edit_phone(db, sid, args.pop("name"), args.pop("imei1"), args.pop("purchase_rate"),
+                              args.pop("sale_price"), **args)
+    other = _used(db, U3, price=1000, sale=2000, model="Nokia 105", mobile_type="keypad")
+    with pytest.raises(BusinessError):                                             # IMEI of another phone
+        PH.edit_phone(db, sid, "X", U3, 1, 1, mobile_type="smartphone", ram_gb=8, storage_gb=128)
+    PH.edit_phone(db, sid, "Infinix Hot 40 Pro", U2, 21000, 27000, mobile_type="keypad")   # keypad: no sizes
+    assert db.one("SELECT ram_gb, mobile_type FROM products WHERE id=?", (up["product_id"],)) == {"ram_gb": None,
+                                                                                               "mobile_type": "keypad"}
+    assert other
+
+
+def test_delete_a_phone_from_stock(shop):
+    db, sup, cust, _ = shop
+    smart, rows = _phone_stock(db, sup)
+    value_before, cash_before = reports.stock_position(db)["total_value"], reports.cash_in_hand(db)
+    with pytest.raises(BusinessError):                                             # a reason is required
+        PH.remove_phone(db, rows[P2]["serial_id"], " ")
+    PH.remove_phone(db, rows[P2]["serial_id"], "Entered by mistake")
+    left = {r["imei1"] for r in PH.in_stock(db)}
+    assert left == {P1, P3} and reports.dashboard(db)["phones_in_stock"] == 2 and stock_qty(db.conn, smart) == 2
+    assert reports.stock_position(db)["total_value"] == value_before - 25000
+    assert reports.cash_in_hand(db) == cash_before                                 # no money moves
+    assert db.one("SELECT price FROM purchase_items WHERE product_id=?", (smart,))["price"] == 25000
+    move = db.one("SELECT * FROM stock_moves WHERE ref_type='phone_removed'")
+    assert P2 in move["note"] and "Entered by mistake" in move["note"] and move["qty"] == -1
+    assert db.scalar("SELECT COUNT(*) FROM audit_log WHERE action='Phone removed from stock'") == 1
+    with pytest.raises(BusinessError):                                             # already gone
+        PH.remove_phone(db, rows[P2]["serial_id"], "again")
+    inv = trading.create_invoice(db, cust, [{"product_id": smart, "qty": 1, "price": 29000, "serial": P1}], paid=29000)
+    with pytest.raises(BusinessError):                                             # a sold phone cannot be removed
+        PH.remove_phone(db, rows[P1]["serial_id"], "test")
+    with pytest.raises(BusinessError):
+        PH.edit_phone(db, rows[P1]["serial_id"], "X", P1, 1, 1)
+    assert inv
+    # the same IMEI can be entered again correctly afterwards
+    trading.create_purchase(db, sup, [{"product_id": smart, "qty": 1, "price": 25000, "serials": [P2]}], paid=25000)
+    assert P2 in {r["imei1"] for r in PH.in_stock(db)}
+
+
+# ---------- Android app: business figures ----------
+def test_business_overview_matches_the_windows_figures(shop):
+    from datetime import date
+    from app.services import business_overview as BO, loans
+    db, sup, cust, _ = shop
+    smart, rows = _phone_stock(db, sup)
+    charger = masters.add_product(db, "Charger", 800, purchase_price=400, category="Accessories", low_stock_level=5)
+    cable = masters.add_product(db, "Cable", 300, category="Accessories", low_stock_level=2)
+    trading.create_purchase(db, sup, [{"product_id": charger, "qty": 4, "price": 400}], paid=1000)   # owes 600
+    trading.create_invoice(db, cust, [{"product_id": smart, "qty": 1, "price": 29000, "serial": P3},
+                                      {"product_id": charger, "qty": 1, "price": 800}], paid=20000)    # owes 9,800
+    payments.add_expense(db, "Rent", 1000)
+    loans.give_loan(db, "Rashid", 500)
+    o = BO.overview(db)
+    st, mo, sa, pu, fi, ac = (o[k] for k in ("stock", "mobiles", "sales", "purchases", "finance", "activity"))
+    sp = reports.stock_position(db)
+    assert st["purchase_value"] == sp["total_value"] == 2 * 25000 + 3 * 400
+    assert (st["items"], st["quantity"]) == (2, 5) and st["sale_value"] == 2 * 29000 + 3 * 800
+    assert (st["low_count"], st["out_count"]) == (1, 2)          # Charger low; Cable + Samsung A15 (fixture) finished
+    assert {c["category"] for c in st["categories"]} == {"Mobile Phone", "Accessories"}
+    assert sum(c["purchase_value"] for c in st["categories"]) == st["purchase_value"]
+    assert mo["total"] == 2 == reports.dashboard(db)["phones_in_stock"]
+    assert {p["imei1"] for p in mo["phones"]} == {P1, P2}                           # the sold phone is not there
+    assert mo["brands"] == [{"brand": "Infinix", "qty": 2}] and mo["models"][0]["qty"] == 2
+    ph = mo["phones"][0]
+    assert (ph["ram_gb"], ph["storage_gb"], ph["purchase_price"], ph["sale_price"]) == (8, 256, 25000, 29000)
+    today = date.today().isoformat()
+    assert sa["today_total"] == 29800 and sa["today_count"] == 1 and sa["all_count"] == 1
+    assert sa["month_total"] == 29800 and sa["today_list"][0]["customer"] == "Ali" and len(sa["monthly"]) == 12
+    assert sa["monthly"][-1]["total"] == 29800
+    assert pu["today_total"] == 75000 + 1600 == pu["month_total"] == pu["all_total"] and len(pu["recent"]) == 2
+    pl = reports.profit_loss(db, today, today)
+    assert fi == {"receivables": 9800, "payables": 600, "today_profit": pl["net_profit"],
+                  "month_profit": reports.profit_loss(db, date.today().replace(day=1).isoformat(), today)["net_profit"],
+                  "cash_in_hand": reports.cash_in_hand(db)}
+    assert pl["net_profit"] == (29800 - 25000 - 400) - 1000
+    assert ac["sales"][0]["amount"] == 29800 and ac["purchases"][0]["amount"] == 1600
+    assert any("Charger" in a["text"] for a in ac["new_products"]) and ac["stock_updates"][0]["kind"] == "Sale"
+    phone = _paired(db)
+    synced = phone.ask(db, "sync")["data"]
+    assert synced["overview"]["mobiles"]["total"] == 2 and synced["business"]["business_name"] is not None
+    assert phone.ask(db, "overview")["data"]["finance"]["receivables"] == 9800
+    PH.remove_phone(db, rows[P1]["serial_id"], "lost")                          # follows every change
+    assert phone.ask(db, "overview")["data"]["mobiles"]["total"] == 1

@@ -208,7 +208,8 @@ def product_ledger_report(db, date_from, date_to, product_id=None):
     rep = _new("Products Ledger", f"{p['name']} (ID {p['id']})   {date_from}  to  {date_to}",
                ["Date", "Description", "Qty In", "Qty Out", "Balance"], (2, 3, 4))
     labels = {"invoice": "Sale", "purchase": "Purchase", "sale_return": "Sale return",
-              "purchase_return": "Purchase return", "repair": "Repair"}
+              "purchase_return": "Purchase return", "repair": "Repair",
+              "phone_edit": "Phone details corrected", "phone_removed": "Phone removed from stock"}
     first = pl["rows"][0] if pl["rows"] else None
     opening = (first["balance"] - first["qty"]) if first else pl["closing"]
     rep["rows"].append(["", "Balance before this period", "", "", f"{opening:g}"])

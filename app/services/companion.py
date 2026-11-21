@@ -316,9 +316,16 @@ def _find(db, args, with_ledger=True):
     raise BusinessError("This customer has no outstanding balance any more")
 
 
+def _overview(db):
+    from .business_overview import overview
+    return overview(db)
+
+
 def _op_sync(db, args, dev):
     rows = outstanding_list(db, True)
+    from .business_overview import overview
     return {"summary": summary(db, rows), "customers": rows, "transactions": transactions(db),
+            "overview": overview(db),            # stock, mobiles, sales, purchases, money, activity
             "template": sms_template.current(db), "business": sms_template.business(db),
             "instructions": sms_template.INSTRUCTIONS_UR, "default_template": sms_template.default_text(db),
             "shop": hello(db)["shop"], "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -340,6 +347,7 @@ OPS = {
                                 "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
     "sync": _op_sync,
     "summary": lambda db, a, d: summary(db),
+    "overview": lambda db, a, d: _overview(db),
     "customers": lambda db, a, d: outstanding_list(db, False),
     "ledger": lambda db, a, d: _find(db, a)["ledger"],
     "payments": lambda db, a, d: [l for l in _find(db, a)["ledger"] if l["credit"] > 0],

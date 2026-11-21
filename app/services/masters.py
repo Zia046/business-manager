@@ -1,5 +1,5 @@
 """Customers, suppliers, products, company info, product search."""
-from .common import BusinessError, audited, stock_qty
+from .common import BusinessError, audited, r2, stock_qty
 
 
 # ---------- parties ----------
@@ -171,7 +171,7 @@ def add_product(db, name, sale_price=0.0, purchase_price=0.0, opening_stock=0.0,
 @audited("Product edited", lambda db,a,k,r: f"id {a[0]}: " + ", ".join(f"{x}={y}" for x,y in k.items()))
 def update_product(db, product_id, **fields):
     allowed = {"name", "category", "tags", "unit", "sale_price", "low_stock_level", "imei_mode", "warranty_months",
-               "barcode", "brand", "mobile_type", "ram_gb", "storage_gb", "condition"}
+               "barcode", "brand", "mobile_type", "ram_gb", "storage_gb", "condition", "purchase_price"}
     bad = set(fields) - allowed
     if bad:
         raise BusinessError(f"Cannot edit: {', '.join(sorted(bad))}")
@@ -182,6 +182,14 @@ def update_product(db, product_id, **fields):
         raise BusinessError("Product not found")
     if "name" in fields and not str(fields["name"]).strip():
         raise BusinessError("Product name is required")
+    if "purchase_price" in fields:
+        # the CURRENT purchase rate: used for stock value, the next sale's profit and the next purchase's
+        # suggested price. Saved invoices, purchases and returns keep their own prices and costs.
+        rate = purchase_rate(fields.pop("purchase_price"))
+        if abs(rate - p["avg_cost"]) > 0.004 or abs(rate - p["last_purchase_price"]) > 0.004:
+            fields["avg_cost"] = fields["last_purchase_price"] = rate
+        if not fields:
+            return
     if "warranty_months" in fields:
         fields["warranty_months"] = _months(fields["warranty_months"])
     if "barcode" in fields:
@@ -220,6 +228,18 @@ def update_product(db, product_id, **fields):
     sets = ", ".join(f"{k}=?" for k in fields)
     with db.transaction() as c:
         c.execute(f"UPDATE products SET {sets} WHERE id=?", (*fields.values(), product_id))
+
+
+def purchase_rate(value) -> float:
+    try:
+        rate = r2(float(value))
+    except (TypeError, ValueError):
+        raise BusinessError("Enter the purchase rate as a number")
+    if rate < 0:
+        raise BusinessError("Purchase rate cannot be negative")
+    if rate > 100_000_000:
+        raise BusinessError("Purchase rate is too large")
+    return rate
 
 
 def db_has_imei(db, product_id) -> bool:

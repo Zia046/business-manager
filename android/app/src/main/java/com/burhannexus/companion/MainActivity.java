@@ -13,6 +13,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** Home dashboard: the figures from the last sync, the connection status and SYNC NOW. */
@@ -78,10 +79,67 @@ public class MainActivity extends Activity implements Sync.Listener {
         hint.setGravity(Gravity.CENTER);
         page.addView(hint, Ui.lp(this, 4));
 
-        page.addView(nav("Outstanding Customers", OutstandingActivity.class), Ui.lp(this, 14));
+        // business figures: one small tile per section, the details open on their own page
+        page.addView(Ui.text(this, "Business", 17, Ui.NAVY, true), Ui.lp(this, 18));
+        String[][] tiles = {
+                {BusinessActivity.STOCK, "📦"}, {BusinessActivity.MOBILES, "📱"},
+                {BusinessActivity.SALES, "🧾"}, {BusinessActivity.PURCHASES, "🛒"},
+                {BusinessActivity.FINANCE, "💰"}, {BusinessActivity.ACTIVITY, "🕘"}};
+        int[] colors = {Ui.TEAL, Ui.CYAN, Ui.GREEN, Ui.NAVY, Ui.GOLD, Ui.PURPLE};
+        for (int i = 0; i < tiles.length; i += 2) {
+            LinearLayout row = Ui.row(this);
+            row.addView(tile(tiles[i][0], tiles[i][1], colors[i]), half());
+            row.addView(Ui.gap(this, 10));
+            row.addView(tile(tiles[i + 1][0], tiles[i + 1][1], colors[i + 1]), half());
+            page.addView(row, Ui.lp(this, 10));
+        }
+
+        page.addView(nav("Outstanding Customers", OutstandingActivity.class), Ui.lp(this, 18));
         page.addView(nav("Send SMS Reminders", ReminderActivity.class), Ui.lp(this, 8));
         page.addView(nav("SMS Template Settings", TemplateActivity.class), Ui.lp(this, 8));
         page.addView(nav("Connection with Computer", ConnectActivity.class), Ui.lp(this, 8));
+    }
+
+    private final java.util.Map<String, TextView> tileValues = new java.util.HashMap<>();
+
+    private LinearLayout tile(String section, String icon, int color) {
+        LinearLayout t = Ui.column(this);
+        t.setBackground(Ui.outline(this, android.graphics.Color.WHITE, Ui.LINE));
+        int p = Ui.dp(this, 12);
+        t.setPadding(p, p, p, p);
+        LinearLayout top = Ui.row(this);
+        TextView ic = Ui.text(this, icon, 18, color, false);
+        top.addView(ic);
+        top.addView(Ui.gap(this, 6));
+        top.addView(Ui.text(this, BusinessActivity.title(section), 13, Ui.MUTED, true),
+                new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        t.addView(top);
+        TextView v = Ui.text(this, "-", 17, color, true);
+        t.addView(v, Ui.lp(this, 4));
+        tileValues.put(section, v);
+        t.setClickable(true);
+        t.setOnClickListener(x -> startActivity(new Intent(this, BusinessActivity.class).putExtra("section", section)));
+        return t;
+    }
+
+    private void renderTiles() {
+        JSONObject o = Store.data(this).optJSONObject("overview");
+        if (o == null) o = new JSONObject();
+        JSONObject st = o.optJSONObject("stock"), mo = o.optJSONObject("mobiles"), sa = o.optJSONObject("sales"),
+                pu = o.optJSONObject("purchases"), fi = o.optJSONObject("finance"), ac = o.optJSONObject("activity");
+        setTile(BusinessActivity.STOCK, st == null ? null : Ui.money(st.optDouble("purchase_value")) + " stock");
+        setTile(BusinessActivity.MOBILES, mo == null ? null : mo.optInt("total") + " phones");
+        setTile(BusinessActivity.SALES, sa == null ? null : Ui.money(sa.optDouble("today_total")) + " today");
+        setTile(BusinessActivity.PURCHASES, pu == null ? null : Ui.money(pu.optDouble("today_total")) + " today");
+        setTile(BusinessActivity.FINANCE, fi == null ? null : Ui.money(fi.optDouble("cash_in_hand")) + " cash");
+        JSONArray recent = ac == null ? null : ac.optJSONArray("sales");
+        setTile(BusinessActivity.ACTIVITY, ac == null ? null
+                : recent != null && recent.length() > 0 ? "Last sale " + recent.optJSONObject(0).optString("date") : "Open");
+    }
+
+    private void setTile(String section, String value) {
+        TextView v = tileValues.get(section);
+        if (v != null) v.setText(value == null ? "Sync to see" : value);
     }
 
     private LinearLayout.LayoutParams half() {
@@ -142,6 +200,7 @@ public class MainActivity extends Activity implements Sync.Listener {
         String name = Store.shop(this);
         shop.setText(name.isEmpty() ? "Burhan Nexus" : name);
         lastSync.setText("Last Sync: " + Store.lastSyncText(this));
+        renderTiles();
         total.setText(Ui.money(s.optDouble("total_outstanding", 0)));
         totalNote.setText("PKR, customers and cash loans");
         customers.setText(String.valueOf(s.optInt("customers", 0)));

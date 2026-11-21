@@ -4,7 +4,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QSpinBox, QFormLayout, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPushButton, QVBoxLayout)
 
-from ..services import masters
+from ..services import masters, reports
 from ..services.common import BusinessError, is_owner
 from .barcode_print import BarcodePrintDialog, ensure_barcode
 from .phone_fields import PhoneFields
@@ -47,7 +47,8 @@ class ProductForm(QDialog):
         self.imei_mode.setCurrentIndex(1 if p.get("imei_mode") == "double" else 0)
         self.tags = QLineEdit(p.get("tags") or "", placeholderText="#mobile #samsung #android")
         self.unit = QLineEdit(p.get("unit") or "pcs")
-        self.purchase = _spin(p.get("last_purchase_price", 0))
+        # existing product: its current purchase rate (the cost used for stock value and the next sale's profit)
+        self.purchase = _spin(p.get("avg_cost", 0) if product else 0)
         self.sale = _spin(p.get("sale_price", 0))
         self.opening = _spin(p.get("opening_stock", 0), 3)
         self.low = _spin(p.get("low_stock_level", 0), 3)
@@ -57,9 +58,10 @@ class ProductForm(QDialog):
         self.warranty.setSuffix(" month(s)")
         self.warranty.setSpecialValueText("No warranty")
         self.warranty.setValue(int(p.get("warranty_months") or 0))
-        if product:  # cost and opening stock change only through purchases/sales
-            self.purchase.setEnabled(False)
+        if product:  # opening stock changes only through purchases/sales; the purchase rate may be corrected
             self.opening.setEnabled(False)
+            self.purchase.setToolTip("Current purchase rate. Changing it does not change saved invoices, "
+                                     "purchases or their profit; it is used from now on.")
         self.form = form
         self.brand = QLineEdit(p.get("brand") or "", placeholderText="e.g. Infinix, Samsung, Nokia")
         self.condition = QComboBox()
@@ -77,7 +79,7 @@ class ProductForm(QDialog):
         form.addRow("Hash tags", self.tags)
         form.addRow("Unit", self.unit)
         if is_owner():
-            form.addRow("Purchase Price", self.purchase)
+            form.addRow("Purchase Rate" if product else "Purchase Price", self.purchase)
         form.addRow("Sale Price", self.sale)
         form.addRow("Opening Stock", self.opening)
         form.addRow("Low-stock alert at", self.low)
@@ -132,6 +134,12 @@ class ProductForm(QDialog):
             return {}
         return {**self.phone.values(), "brand": self.brand.text(), "condition": self.condition.currentData()}
 
+    def _rate_change(self) -> dict:
+        """{'purchase_price': new rate} when the owner changed it, else {} (staff never see or send it)."""
+        if not is_owner() or abs(self.purchase.value() - float(self.product.get("avg_cost") or 0)) < 0.005:
+            return {}
+        return {"purchase_price": self.purchase.value()}
+
     def _generate_barcode(self):
         if self.barcode.text().strip() and QMessageBox.question(
                 self, "Barcode", "This product already has a barcode. Replace it with a new one?\n"
@@ -151,7 +159,8 @@ class ProductForm(QDialog):
                                        category=cat, tags=self.tags.text(), unit=self.unit.text(),
                                        sale_price=self.sale.value(), low_stock_level=self.low.value(),
                                        imei_mode=mode, warranty_months=self.warranty.value(),
-                                       barcode=self.barcode.text(), **self._phone_values())
+                                       barcode=self.barcode.text(), **self._phone_values(),
+                                       **self._rate_change())
                 self.saved_id = self.product["id"]
             else:
                 self.saved_id = masters.add_product(
@@ -200,7 +209,7 @@ class ProductsWindow(QDialog):
         self.table.setRowCount(len(rows))
         low = 0
         for i, r in enumerate(rows):
-            is_low = r["stock"] <= r["low_stock_level"]
+            is_low = reports.is_low(r, r["stock"])
             low += is_low
             set_row(self.table, i, [r["id"], r["name"], r["category"], r["tags"], r["unit"],
                                     money(r["avg_cost"]), money(r["sale_price"]), f"{r['stock']:g}"],

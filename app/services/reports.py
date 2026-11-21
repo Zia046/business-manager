@@ -67,14 +67,23 @@ def outstanding(db):
             "total": r2(cust["total"] + loan_total)}
 
 
+def is_low(product, qty) -> bool:
+    """Low-stock rule: at or below the product's own level. Mobile phones (IMEI-tracked) are never 'low':
+    every phone is a single piece, so 0 or 1 left is normal for them."""
+    if product.get("track_serial"):
+        return False
+    return qty <= product["low_stock_level"]
+
+
 def stock_position(db):
     rows = db.query(
-        "SELECT p.id, p.name, p.category, p.unit, p.avg_cost, p.sale_price, p.low_stock_level, "
+        "SELECT p.id, p.name, p.category, p.unit, p.avg_cost, p.sale_price, p.low_stock_level, p.track_serial, "
         "p.opening_stock + COALESCE((SELECT SUM(qty) FROM stock_moves WHERE product_id=p.id),0) AS qty "
         "FROM products p WHERE p.active=1 ORDER BY p.name")
     for r in rows:
         r["value"] = r2(r["qty"] * r["avg_cost"])
-        r["low"] = r["qty"] <= r["low_stock_level"]
+        r["is_phone"] = bool(r["track_serial"])
+        r["low"] = is_low(r, r["qty"])
     return {"rows": rows, "total_value": r2(sum(r["value"] for r in rows))}
 
 
