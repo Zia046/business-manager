@@ -20,6 +20,8 @@ except ValueError:                      # temp folder on another drive
     _rel = None
 os.environ.setdefault("QT_QPA_PLATFORM", f"offscreen:configfile={_rel}" if _rel and ":" not in _rel else "offscreen")
 os.environ.setdefault("QT_FORCE_STDERR_LOGGING", "1")     # Qt messages into the log, also on Windows
+if os.path.isdir(r"C:\Windows\Fonts"):                     # real Windows fonts in the screenshots
+    os.environ.setdefault("QT_QPA_FONTDIR", r"C:\Windows\Fonts")
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 from PySide6.QtCore import QPoint, Qt  # noqa: E402
@@ -74,6 +76,15 @@ def _check_fits(dialog, *buttons):
     assert area.contains(dialog.geometry()), (dialog.geometry(), area)
     for text in buttons:
         assert _fully_inside(dialog, _button(dialog, text)), text
+    # no input is cut off at the right edge, and no side scrolling is needed
+    scroll = dialog.findChild(QtWidgets.QScrollArea)
+    view = scroll.viewport()
+    for w in scroll.widget().findChildren(QtWidgets.QWidget):
+        if isinstance(w, (QtWidgets.QLineEdit, QtWidgets.QComboBox, QtWidgets.QAbstractSpinBox)) and w.isVisible() \
+                and w.parent() is scroll.widget():
+            right = w.mapTo(view, QPoint(w.width(), 0)).x()
+            assert right <= view.width() + 1, (w.objectName() or type(w).__name__, right, view.width())
+    assert not scroll.horizontalScrollBar().isVisible()
     return frame
 
 

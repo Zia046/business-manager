@@ -48,7 +48,9 @@ class TwoColumnForm:
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # normally never needed (labels wrap and fields shrink); on a very small screen a side scroll bar is
+        # better than fields cut off at the edge
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll.setMinimumHeight(120)
         body = QWidget()
         body.setObjectName("formBody")
@@ -103,8 +105,25 @@ class TwoColumnForm:
         (self.left_buttons if left else self.buttons).addWidget(b)
         return b
 
+    def _wrap_labels(self):
+        """Long labels may use two lines, so a narrow window keeps every field fully visible."""
+        for form in (self.left, self.right):
+            for i in range(form.rowCount()):
+                item = form.itemAt(i, QFormLayout.LabelRole)
+                lab = item.widget() if item else None
+                if isinstance(lab, QLabel) and lab.text():
+                    lab.setWordWrap(True)
+                    lab.setMaximumWidth(210)
+                    lab.setMinimumWidth(min(lab.sizeHint().width(), 120))
+                field = form.itemAt(i, QFormLayout.FieldRole)
+                w = field.widget() if field else None
+                if w is not None and not isinstance(w, (QLabel, QPushButton)):
+                    w.setMinimumWidth(150)
+                    w.setSizePolicy(QSizePolicy.Expanding, w.sizePolicy().verticalPolicy())
+
     def fit(self):
         """A comfortable size that is never bigger than the screen, centred on it."""
+        self._wrap_labels()
         d = self.dialog
         screen = d.screen() if d.screen() else QGuiApplication.primaryScreen()
         area = screen.availableGeometry() if screen else None
