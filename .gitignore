@@ -16,3 +16,8 @@ android/local.properties
 
 bm_offscreen_screen.json
 ui_shots/
+
+# signing keys never go into the repository
+*.p12
+*.jks
+*.keystore

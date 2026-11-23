@@ -10,18 +10,19 @@ android {
         applicationId "com.burhannexus.companion"
         minSdk 26
         targetSdk 34
-        versionCode 4
-        versionName "2.2"
+        versionCode 5
+        versionName "2.3"
     }
     // One fixed key for every build, so a new APK installs over the old one (keeps the pairing and data).
-    // Before this, every GitHub build signed with a new random debug key and Android refused the update.
+    // The key is NOT in the repository: the GitHub workflow writes it from the repository secrets
+    // ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions).
     signingConfigs {
         companion {
-            storeFile file('companion-signing.p12')
+            storeFile file(System.getenv('BN_KEYSTORE_FILE') ?: 'missing-keystore.p12')
             storeType 'pkcs12'
-            storePassword 'IyVNgX7bHcozfkkhY2ShZE9V'
+            storePassword System.getenv('BN_KEYSTORE_PASSWORD') ?: ''
             keyAlias 'companion'
-            keyPassword 'IyVNgX7bHcozfkkhY2ShZE9V'
+            keyPassword System.getenv('BN_KEYSTORE_PASSWORD') ?: ''
         }
     }
     buildTypes {

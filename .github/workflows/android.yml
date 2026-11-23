@@ -24,6 +24,21 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      # the signing key comes from the repository secrets, never from the code
+      - name: Signing key from GitHub Secrets
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEY_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEY_B64" ] || [ -z "$KEY_PW" ]; then
+            echo "::error::Add the secrets ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions), then run this workflow again."
+            exit 1
+          fi
+          echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/companion-signing.p12"
+          echo "BN_KEYSTORE_FILE=$RUNNER_TEMP/companion-signing.p12" >> "$GITHUB_ENV"
+          echo "::add-mask::$KEY_PW"
+          echo "BN_KEYSTORE_PASSWORD=$KEY_PW" >> "$GITHUB_ENV"
+
       - name: Build the APK
         working-directory: android
         run: gradle --no-daemon assembleDebug
