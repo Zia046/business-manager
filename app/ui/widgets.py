@@ -70,8 +70,10 @@ def size_line_columns(table: QTableWidget, widths: dict, stretch_col: int, butto
     head.setMinimumSectionSize(36)
     probe = None
     if button_col is not None:
-        probe = remove_button()
+        probe = remove_button()                     # only measured, never shown
+        probe.setAttribute(Qt.WA_DontShowOnScreen)
         probe.setParent(table.viewport())           # styled like the real buttons inside the rows
+        probe.hide()
         probe.ensurePolished()
     for c, w in widths.items():
         need = head.sectionSizeHint(c) + 4          # heading text + padding
@@ -83,6 +85,7 @@ def size_line_columns(table: QTableWidget, widths: dict, stretch_col: int, butto
         # rows tall enough for the button: its own height + its margins (2 px top and bottom) + the grid line
         vh = table.verticalHeader()
         vh.setDefaultSectionSize(max(vh.defaultSectionSize(), probe.sizeHint().height() + 6, 34))
+        probe.setParent(None)                       # gone at once, not "later"
         probe.deleteLater()
 
 
