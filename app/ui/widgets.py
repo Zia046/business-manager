@@ -79,4 +79,7 @@ def size_line_columns(table: QTableWidget, widths: dict, stretch_col: int, butto
             need = max(need, probe.sizeHint().width() + 18)
         table.setColumnWidth(c, max(w, need))
     if probe is not None:
+        # rows tall enough for the button: its own height + its margins (2 px top and bottom) + the grid line
+        vh = table.verticalHeader()
+        vh.setDefaultSectionSize(max(vh.defaultSectionSize(), probe.sizeHint().height() + 6))
         probe.deleteLater()
