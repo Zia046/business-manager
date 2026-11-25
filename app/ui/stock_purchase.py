@@ -15,7 +15,7 @@ from .printing import print_purchase
 from .product_picker import ProductPickerDialog
 from .products import ProductForm
 from .purchase_model import PurchaseDraft
-from .widgets import money, remove_button, size_line_columns
+from .widgets import money, size_line_columns, sync_remove_buttons
 
 COLS = ["ID", "Product", "In stock", "Quantity Purchase", "Purchase Price", "Amount", "Remove"]
 C_ID, C_NAME, C_STOCK, C_QTY, C_PRICE, C_AMT, C_DEL = range(7)
@@ -202,7 +202,8 @@ class StockPurchaseDialog(EnterSafeDialog):
 
     def _refresh_table(self):
         self._loading = True
-        self.table.setRowCount(len(self.draft.lines))
+        sync_remove_buttons(self.table, C_DEL, self._remove, len(self.draft.lines),
+                            tooltip="Remove this line from the purchase")
         for r, ln in enumerate(self.draft.lines):
             price_txt = "" if ln["price"] is None else f"{ln['price']:.2f}"
             name = ln["name"] + (f"  [{len(ln['serials'])} phone(s) with IMEI]" if ln["serials"] else "")
@@ -220,8 +221,6 @@ class StockPurchaseDialog(EnterSafeDialog):
                 elif col == C_PRICE and ln.get("price_saved") and ln["price"] == ln.get("price_start"):
                     it.setBackground(QColor("#DCFCE7"))  # filled from the saved purchase price (can be changed)
                 self.table.setItem(r, col, it)
-            rm = remove_button(lambda _=False, i=r: self._remove(i), tooltip="Remove this line from the purchase")
-            self.table.setCellWidget(r, C_DEL, rm)
         self._loading = False
         self._recalc()
 

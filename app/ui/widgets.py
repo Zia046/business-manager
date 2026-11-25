@@ -47,14 +47,15 @@ def selected_id(table: QTableWidget):
     return int(table.item(rows[0].row(), 0).text()) if rows else None
 
 
-def remove_button(slot, text="Remove", tooltip="") -> QPushButton:
+def remove_button(slot=None, text="Remove", tooltip="") -> QPushButton:
     """The standard red Remove button (style 'remove' in theme.py). Used in table rows and under lists."""
     b = QPushButton(text)
     b.setObjectName("remove")
     b.setAutoDefault(False)
     if tooltip:
         b.setToolTip(tooltip)
-    b.clicked.connect(slot)
+    if slot is not None:
+        b.clicked.connect(slot)
     return b
 
 
@@ -69,7 +70,7 @@ def size_line_columns(table: QTableWidget, widths: dict, stretch_col: int, butto
     head.setMinimumSectionSize(36)
     probe = None
     if button_col is not None:
-        probe = remove_button(lambda: None)
+        probe = remove_button()
         probe.setParent(table.viewport())           # styled like the real buttons inside the rows
         probe.ensurePolished()
     for c, w in widths.items():
@@ -83,3 +84,22 @@ def size_line_columns(table: QTableWidget, widths: dict, stretch_col: int, butto
         vh = table.verticalHeader()
         vh.setDefaultSectionSize(max(vh.defaultSectionSize(), probe.sizeHint().height() + 6, 34))
         probe.deleteLater()
+
+
+def sync_remove_buttons(table: QTableWidget, col: int, on_remove, rows: int, tooltip="Remove this line"):
+    """Set the table to `rows` rows, each with one red Remove button in `col`.
+
+    The buttons are kept between refreshes (not created again each time): a replaced cell widget is only
+    deleted later by Qt, and until then the old button stayed visible at a wrong place over other cells.
+    A button finds its own row when clicked, so it stays right after lines are added or removed."""
+    for r in range(rows, table.rowCount()):             # rows that go away: hide their buttons at once
+        w = table.cellWidget(r, col)
+        if w is not None:
+            w.hide()
+            table.removeCellWidget(r, col)
+    table.setRowCount(rows)
+    for r in range(rows):
+        if table.cellWidget(r, col) is None:
+            b = remove_button(tooltip=tooltip)
+            b.clicked.connect(lambda _=False, b=b: on_remove(table.indexAt(b.geometry().center()).row()))
+            table.setCellWidget(r, col, b)

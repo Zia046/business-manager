@@ -203,8 +203,13 @@ def _check_line_table(dlg, table, cols, button_col):
             continue
         assert table.columnWidth(c) >= head.sectionSizeHint(c), (table.horizontalHeaderItem(c).text(),
                                                                   table.columnWidth(c), head.sectionSizeHint(c))
+    # exactly one visible Remove button per line, each inside its own cell (no stray button over other cells)
+    shown = [b for b in table.viewport().findChildren(QtWidgets.QPushButton) if b.isVisible()]
+    assert len(shown) == table.rowCount(), (len(shown), table.rowCount())
     for r in range(table.rowCount()):
         btn = table.cellWidget(r, button_col)
+        cell = table.visualRect(table.model().index(r, button_col))
+        assert cell.contains(btn.geometry()), (r, cell, btn.geometry())
         assert btn.objectName() == "remove" and btn.text() == "Remove"
         assert btn.width() >= btn.sizeHint().width(), (btn.width(), btn.sizeHint().width())   # whole word fits
         assert btn.height() >= btn.sizeHint().height() - 2

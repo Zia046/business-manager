@@ -14,7 +14,7 @@ from .invoice_model import InvoiceDraft
 from .parties import PartyForm
 from .printing import print_invoice
 from .product_picker import ProductPickerDialog
-from .widgets import money, remove_button, size_line_columns
+from .widgets import money, size_line_columns, sync_remove_buttons
 
 COLS = ["ID", "Product", "Stock", "Qty", "Price", "Discount", "Amount", ""]
 C_ID, C_NAME, C_STOCK, C_QTY, C_PRICE, C_DISC, C_AMT, C_DEL = range(8)
@@ -326,7 +326,8 @@ class SaleInvoiceDialog(EnterSafeDialog):
 
     def _refresh_table(self):
         self._loading = True
-        self.table.setRowCount(len(self.draft.lines))
+        sync_remove_buttons(self.table, C_DEL, self._remove_line, len(self.draft.lines),
+                            tooltip="Remove this line from the invoice")
         for r, ln in enumerate(self.draft.lines):
             cells = [(C_ID, str(ln["product_id"]), False), (C_NAME, self._line_name(ln), False),
                      (C_STOCK, f"{ln['stock']:g}", False), (C_QTY, f"{ln['qty']:g}", not ln["track_serial"]),
@@ -341,8 +342,6 @@ class SaleInvoiceDialog(EnterSafeDialog):
                 if col == C_QTY and ln["qty"] > ln["stock"]:
                     it.setBackground(QColor("#FEE2E2"))  # more than available stock
                 self.table.setItem(r, col, it)
-            rm = remove_button(lambda _=False, i=r: self._remove_line(i), tooltip="Remove this line from the invoice")
-            self.table.setCellWidget(r, C_DEL, rm)
         self._loading = False
         self._recalc()
 
