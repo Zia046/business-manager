@@ -75,7 +75,8 @@ def size_line_columns(table: QTableWidget, widths: dict, stretch_col: int, butto
     for c, w in widths.items():
         need = head.sectionSizeHint(c) + 4          # heading text + padding
         if c == button_col and probe is not None:
-            need = max(need, probe.sizeHint().width() + 10)   # + the button's own margins
+            # + the button's margins in the cell (4 px each side), the grid line and a little air
+            need = max(need, probe.sizeHint().width() + 18)
         table.setColumnWidth(c, max(w, need))
     if probe is not None:
         probe.deleteLater()
