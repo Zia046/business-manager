@@ -23,6 +23,7 @@ ERROR = "#DC2626"
 # Home screen + Dashboard accents (one meaning each)
 C_NAVY = "#1B2A4A"         # main / neutral
 C_RED = "#D32F3A"          # primary actions, important highlights, money owed
+REMOVE, REMOVE_HOVER, REMOVE_PRESSED = "#CF3F49", "#B5333C", "#992A32"   # softer red for Remove buttons
 C_GREEN = "#1E8E4E"        # positive money: sales, profit, completed
 C_GOLD = "#D99A06"         # selected financial highlights: cash, net profit
 C_CYAN = "#0E9FC0"         # information
@@ -86,6 +87,16 @@ QPushButton:focus {{ border: 2px solid {NAVY}; padding: 6px 18px; }}
 QPushButton#secondary {{ background: {SURFACE}; color: {TEXT}; border: 1px solid {LINE_DARK}; }}
 QPushButton#secondary:hover {{ background: {HEAD_BG}; }}
 QPushButton#secondary:pressed {{ background: {LINE}; }}
+/* Remove buttons: one soft red everywhere, set apart from normal action buttons */
+QPushButton#remove {{ background: {REMOVE}; color: #ffffff; border: 1px solid {REMOVE}; border-radius: 7px;
+    padding: 6px 14px; font-weight: 600; }}
+QPushButton#remove:hover {{ background: {REMOVE_HOVER}; border-color: {REMOVE_HOVER}; }}
+QPushButton#remove:pressed {{ background: {REMOVE_PRESSED}; border-color: {REMOVE_PRESSED}; }}
+QPushButton#remove:focus {{ border: 2px solid {NAVY}; padding: 5px 13px; }}
+QPushButton#remove:disabled {{ background: #E9B4B8; border-color: #E9B4B8; }}
+/* inside a table row (about 30 px high) the same button is compact, so the whole word fits */
+QAbstractItemView QPushButton#remove {{ padding: 2px 8px; margin: 2px 4px; border-radius: 6px; font-size: 12px; }}
+QAbstractItemView QPushButton#remove:focus {{ padding: 1px 7px; }}
 QLabel#title {{ font-size: 24px; font-weight: 700; color: {TEXT}; }}
 QLabel#subtitle {{ color: {MUTED}; }}
 QLabel#error {{ color: {ERROR}; font-weight: 600; }}

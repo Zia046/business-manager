@@ -12,9 +12,10 @@ from .imei_dialogs import ask_purchase_imeis
 from .parties import PartyForm
 from .party_picker import combo_party_id, make_party_combo
 from .printing import print_purchase
+from .product_picker import ProductPickerDialog
 from .products import ProductForm
 from .purchase_model import PurchaseDraft
-from .widgets import money
+from .widgets import money, remove_button, size_line_columns
 
 COLS = ["ID", "Product", "In stock", "Quantity Purchase", "Purchase Price", "Amount", "Remove"]
 C_ID, C_NAME, C_STOCK, C_QTY, C_PRICE, C_AMT, C_DEL = range(7)
@@ -55,7 +56,15 @@ class StockPurchaseDialog(EnterSafeDialog):
         self.search = QLineEdit(placeholderText="Search existing product: name, #tag, ID... (Enter = add)")
         self.search.textChanged.connect(self._search_products)
         self.search.returnPressed.connect(self._add_from_search)
-        srow.addWidget(self.search)
+        srow.addWidget(self.search, 1)
+        pick = QPushButton("Select from List")
+        pick.setObjectName("secondary")
+        pick.setToolTip("Open the whole product list with search (F6)")
+        pick.setAutoDefault(False)
+        pick.setFocusPolicy(Qt.NoFocus)
+        pick.clicked.connect(self._pick_from_list)
+        srow.addWidget(pick)
+        QShortcut(QKeySequence("F6"), self, activated=self._pick_from_list)
         newp = QPushButton("+ New Product")
         newp.setObjectName("secondary")
         newp.clicked.connect(self._new_product)
@@ -71,8 +80,8 @@ class StockPurchaseDialog(EnterSafeDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        for c, w in ((C_ID, 50), (C_NAME, 330), (C_STOCK, 90), (C_QTY, 90), (C_PRICE, 200), (C_AMT, 130), (C_DEL, 90)):
-            self.table.setColumnWidth(c, w)
+        size_line_columns(self.table, {C_ID: 50, C_STOCK: 80, C_QTY: 90, C_PRICE: 130, C_AMT: 120, C_DEL: 80},
+                          C_NAME, button_col=C_DEL)
         self.table.itemChanged.connect(self._cell_changed)
         self.table.itemDelegate().closeEditor.connect(self._editor_closed)
         root.addWidget(self.table, 1)
@@ -149,6 +158,17 @@ class StockPurchaseDialog(EnterSafeDialog):
             p = masters.search_products(self.db, str(f.saved_id))[0]
             self._add_product(p)
 
+    def _pick_from_list(self):
+        """'Select from List': the whole product list; the chosen product goes through the same steps as a
+        product picked from the search results (IMEI for phones, saved purchase price, quantity)."""
+        dlg = ProductPickerDialog(self.db, self, self.search.text(), title="Stock Purchase - select product")
+        if dlg.exec() and dlg.chosen:
+            self.search.clear()
+            self.results.clear()
+            self._add_product(dlg.chosen)
+        else:
+            self.search.setFocus()
+
     def _add_from_search(self):
         item = self.results.currentItem()
         if item:
@@ -200,10 +220,7 @@ class StockPurchaseDialog(EnterSafeDialog):
                 elif col == C_PRICE and ln.get("price_saved") and ln["price"] == ln.get("price_start"):
                     it.setBackground(QColor("#DCFCE7"))  # filled from the saved purchase price (can be changed)
                 self.table.setItem(r, col, it)
-            rm = QPushButton("Remove")
-            rm.setObjectName("secondary")
-            rm.setAutoDefault(False)
-            rm.clicked.connect(lambda _=False, i=r: self._remove(i))
+            rm = remove_button(lambda _=False, i=r: self._remove(i), tooltip="Remove this line from the purchase")
             self.table.setCellWidget(r, C_DEL, rm)
         self._loading = False
         self._recalc()

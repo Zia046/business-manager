@@ -187,3 +187,126 @@ def test_second_hand_purchase_window_fits_and_saves(db, qapp):
         "Kamran", 20000, 26000, 8)
     assert dlg.isVisible() and dlg.seller.text() == ""          # stays open for the next phone, as before
     dlg.close()
+
+
+# ---------- Stock Purchase "Select from List", red Remove buttons, readable headings ----------
+def _red(button):
+    img = button.grab().toImage()
+    c = img.pixelColor(8, img.height() // 2)
+    return c.red() > 150 and c.green() < 110 and c.blue() < 120, (c.red(), c.green(), c.blue())
+
+
+def _check_line_table(dlg, table, cols, button_col):
+    head = table.horizontalHeader()
+    for c in cols:
+        if head.sectionResizeMode(c) == QtWidgets.QHeaderView.Stretch:
+            continue
+        assert table.columnWidth(c) >= head.sectionSizeHint(c), (table.horizontalHeaderItem(c).text(),
+                                                                  table.columnWidth(c), head.sectionSizeHint(c))
+    for r in range(table.rowCount()):
+        btn = table.cellWidget(r, button_col)
+        assert btn.objectName() == "remove" and btn.text() == "Remove"
+        assert btn.width() >= btn.sizeHint().width(), (btn.width(), btn.sizeHint().width())   # whole word fits
+        assert btn.height() >= btn.sizeHint().height() - 2
+        ok, rgb = _red(btn)
+        assert ok, rgb
+
+
+def test_stock_purchase_select_from_list_and_headings(db, qapp, monkeypatch):
+    import app.ui.stock_purchase as SP
+    from app.ui.product_picker import ProductPickerDialog
+    sup = masters.add_party(db, "supplier", "Ali Traders")
+    cover = masters.add_product(db, "Back Cover A15", 500, purchase_price=200, category="Accessories",
+                                barcode="80012345")
+    masters.add_product(db, "Charger 25W", 900, purchase_price=600, category="Accessories")
+    products_before = db.scalar("SELECT COUNT(*) FROM products")
+
+    # the list window: search by barcode and by name
+    pick = ProductPickerDialog(db, None, "", title="Stock Purchase - select product")
+    assert pick.table.rowCount() == 2
+    pick.search.setText("80012345")
+    assert pick.table.rowCount() == 1 and pick.table.item(0, 1).text() == "Back Cover A15"
+    pick.search.setText("charger")
+    assert pick.table.rowCount() == 1 and pick.table.item(0, 1).text() == "Charger 25W"
+    pick.close()
+
+    class AutoPick(ProductPickerDialog):        # the user types the barcode and presses Enter
+        def exec(self):
+            self.search.setText("80012345")
+            self._pick(0)
+            return QtWidgets.QDialog.Accepted
+    monkeypatch.setattr(SP, "ProductPickerDialog", AutoPick)
+
+    dlg = SP.StockPurchaseDialog(db)
+    dlg.show()
+    qapp.processEvents()
+    lst, newp = _button(dlg, "Select from List"), _button(dlg, "+ New Product")
+    lay = [l for l in dlg.findChildren(QtWidgets.QHBoxLayout) if l.indexOf(lst) >= 0][0]
+    assert lay.indexOf(lst) == lay.indexOf(newp) - 1 and lay.indexOf(dlg.search) < lay.indexOf(lst)
+    _check_fits_window(dlg)
+    lst.click()
+    qapp.processEvents()
+    assert [ln["product_id"] for ln in dlg.draft.lines] == [cover]
+    assert dlg.draft.lines[0]["price"] == 200                          # saved purchase price filled as before
+    assert db.scalar("SELECT COUNT(*) FROM products") == products_before   # nothing duplicated
+    lst.click()                                                        # the same product again: same line, qty 2
+    qapp.processEvents()
+    assert len(dlg.draft.lines) == 1 and dlg.draft.lines[0]["qty"] == 2
+    assert db.scalar("SELECT COUNT(*) FROM products") == products_before
+    dlg.supplier.setCurrentIndex(dlg.supplier.findData(sup))
+    qapp.processEvents()
+    _check_line_table(dlg, dlg.table, range(len(SP.COLS)), SP.C_DEL)
+    qty_col = SP.COLS.index("Quantity Purchase")
+    assert dlg.table.columnWidth(qty_col) >= dlg.table.horizontalHeader().sectionSizeHint(qty_col)
+    _shot(dlg, "stock_purchase_1366x768")
+    dlg.resize(1000, 620)                                              # a smaller window
+    qapp.processEvents()
+    _check_line_table(dlg, dlg.table, range(len(SP.COLS)), SP.C_DEL)
+    _shot(dlg, "stock_purchase_1000x620")
+    dlg.table.cellWidget(0, SP.C_DEL).click()
+    qapp.processEvents()
+    assert dlg.table.rowCount() == 0 and dlg.draft.lines == []
+    dlg.close()
+
+
+def test_sale_invoice_remove_button_is_whole_and_red(db, qapp):
+    from app.ui import sale_invoice as SI
+    p1 = masters.add_product(db, "Glass Protector", 300, purchase_price=100, opening_stock=10, category="Accessories")
+    p2 = masters.add_product(db, "Data Cable Type-C", 450, purchase_price=200, opening_stock=10, category="Accessories")
+    dlg = SI.SaleInvoiceDialog(db)
+    dlg.show()
+    qapp.processEvents()
+    for pid in (p1, p2):
+        dlg._add_product(masters.search_products(db, str(pid))[0])
+        qapp.processEvents()
+    assert dlg.table.rowCount() == 2
+    _check_line_table(dlg, dlg.table, range(len(SI.COLS)), SI.C_DEL)
+    _shot(dlg, "sale_invoice_1366x768")
+    dlg.resize(980, 640)
+    qapp.processEvents()
+    _check_line_table(dlg, dlg.table, range(len(SI.COLS)), SI.C_DEL)
+    _shot(dlg, "sale_invoice_980x640")
+    dlg.table.cellWidget(0, SI.C_DEL).click()
+    qapp.processEvents()
+    assert dlg.table.rowCount() == 1 and dlg.draft.lines[0]["product_id"] == p2
+    dlg._force_close = True
+    dlg.close()
+
+
+def test_other_remove_buttons_share_the_red_style(db, qapp):
+    from app.ui.labels_ui import LabelsDialog
+    dlg = LabelsDialog(db)
+    dlg.show()
+    qapp.processEvents()
+    b = _button(dlg, "Remove Selected")
+    assert b.objectName() == "remove" and b.width() >= b.sizeHint().width()
+    ok, rgb = _red(b)
+    assert ok, rgb
+    for other in ("Close",):
+        assert _button(dlg, other).objectName() != "remove"
+    dlg.close()
+
+
+def _check_fits_window(dlg):
+    area = dlg.screen().availableGeometry()
+    assert dlg.width() <= area.width() and dlg.height() <= area.height()

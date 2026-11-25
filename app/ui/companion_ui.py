@@ -100,7 +100,7 @@ class CompanionDialog(QDialog):
         lay.addWidget(self.table, 1)
         row = QHBoxLayout()
         remove = QPushButton("Remove Selected Phone")
-        remove.setObjectName("secondary")
+        remove.setObjectName("remove")
         remove.setAutoDefault(False)
         remove.clicked.connect(self._remove)
         close = QPushButton("Close")

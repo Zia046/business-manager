@@ -39,7 +39,7 @@ class LabelsDialog(EnterSafeDialog):
         row.addWidget(self.layout_box)
         row.addStretch()
         remove = QPushButton("Remove Selected")
-        remove.setObjectName("secondary")
+        remove.setObjectName("remove")
         remove.clicked.connect(self._remove)
         clear = QPushButton("Clear")
         clear.setObjectName("secondary")

@@ -1,7 +1,7 @@
 """Small reusable UI helpers."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QGraphicsDropShadowEffect, QHeaderView, QTableWidget,
+from PySide6.QtWidgets import (QAbstractItemView, QGraphicsDropShadowEffect, QHeaderView, QPushButton, QTableWidget,
                                QTableWidgetItem)
 
 
@@ -45,3 +45,37 @@ def selected_id(table: QTableWidget):
     """ID is always kept in column 0."""
     rows = table.selectionModel().selectedRows()
     return int(table.item(rows[0].row(), 0).text()) if rows else None
+
+
+def remove_button(slot, text="Remove", tooltip="") -> QPushButton:
+    """The standard red Remove button (style 'remove' in theme.py). Used in table rows and under lists."""
+    b = QPushButton(text)
+    b.setObjectName("remove")
+    b.setAutoDefault(False)
+    if tooltip:
+        b.setToolTip(tooltip)
+    b.clicked.connect(slot)
+    return b
+
+
+def size_line_columns(table: QTableWidget, widths: dict, stretch_col: int, button_col=None):
+    """Column widths for an entry table (Sale Invoice, Stock Purchase ...): every column is at least as wide as
+    its heading needs, the button column fits a whole 'Remove', and the product column takes the spare room
+    (it shrinks first when the window is small)."""
+    head = table.horizontalHeader()
+    head.setSectionResizeMode(QHeaderView.Interactive)
+    head.setSectionResizeMode(stretch_col, QHeaderView.Stretch)
+    head.setDefaultAlignment(Qt.AlignCenter | Qt.TextWordWrap)
+    head.setMinimumSectionSize(36)
+    probe = None
+    if button_col is not None:
+        probe = remove_button(lambda: None)
+        probe.setParent(table.viewport())           # styled like the real buttons inside the rows
+        probe.ensurePolished()
+    for c, w in widths.items():
+        need = head.sectionSizeHint(c) + 4          # heading text + padding
+        if c == button_col and probe is not None:
+            need = max(need, probe.sizeHint().width() + 10)   # + the button's own margins
+        table.setColumnWidth(c, max(w, need))
+    if probe is not None:
+        probe.deleteLater()

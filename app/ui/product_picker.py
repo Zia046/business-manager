@@ -12,15 +12,15 @@ LIMIT = 500
 
 
 class ProductPickerDialog(QDialog):
-    def __init__(self, db, parent=None, text=""):
+    def __init__(self, db, parent=None, text="", title="Select product from inventory"):
         super().__init__(parent)
         self.db = db
         self.owner = is_owner()
         self.chosen = None
-        self.setWindowTitle("Select product from inventory")
+        self.setWindowTitle(title)
         self.resize(900, 560)
         lay = QVBoxLayout(self)
-        self.search = QLineEdit(text, placeholderText="Search: name, #tag, ID, category or similar spelling...")
+        self.search = QLineEdit(text, placeholderText="Search: name, barcode, #tag, ID, category or similar spelling...")
         self.search.textChanged.connect(self._load)
         self.search.installEventFilter(self)
         lay.addWidget(self.search)

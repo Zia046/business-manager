@@ -11,7 +11,7 @@ from .enter_safe import EnterSafeDialog
 from .imei_dialogs import ask_sale_imei
 from .party_picker import combo_party_id, make_party_combo
 from .return_model import ReturnDraft
-from .widgets import money
+from .widgets import money, size_line_columns
 
 COLS = ["ID", "Product", "On document", "Can return", "Return Qty", "Price", "Amount"]
 C_ID, C_NAME, C_DOC, C_MAX, C_QTY, C_PRICE, C_AMT = range(7)
@@ -61,8 +61,7 @@ class ReturnDialog(EnterSafeDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        for c, w in ((C_ID, 50), (C_NAME, 340), (C_DOC, 110), (C_MAX, 110), (C_QTY, 110), (C_PRICE, 120), (C_AMT, 130)):
-            self.table.setColumnWidth(c, w)
+        size_line_columns(self.table, {C_ID: 50, C_DOC: 100, C_MAX: 100, C_QTY: 100, C_PRICE: 110, C_AMT: 120}, C_NAME)
         self.table.itemChanged.connect(self._cell_changed)
         root.addWidget(self.table, 1)
 

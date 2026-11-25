@@ -14,7 +14,7 @@ from .invoice_model import InvoiceDraft
 from .parties import PartyForm
 from .printing import print_invoice
 from .product_picker import ProductPickerDialog
-from .widgets import money
+from .widgets import money, remove_button, size_line_columns
 
 COLS = ["ID", "Product", "Stock", "Qty", "Price", "Discount", "Amount", ""]
 C_ID, C_NAME, C_STOCK, C_QTY, C_PRICE, C_DISC, C_AMT, C_DEL = range(8)
@@ -147,11 +147,9 @@ class SaleInvoiceDialog(EnterSafeDialog):
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setMinimumHeight(110)
-        head = self.table.horizontalHeader()
-        head.setSectionResizeMode(QHeaderView.Fixed)
-        head.setSectionResizeMode(C_NAME, QHeaderView.Stretch)       # product name takes the spare room
-        for c, w in ((C_ID, 38), (C_STOCK, 56), (C_QTY, 56), (C_PRICE, 88), (C_DISC, 74), (C_AMT, 96), (C_DEL, 74)):
-            self.table.setColumnWidth(c, w)
+        # product name takes the spare room; every other column fits its heading, the last one a whole "Remove"
+        size_line_columns(self.table, {C_ID: 38, C_STOCK: 56, C_QTY: 56, C_PRICE: 88, C_DISC: 74, C_AMT: 96,
+                                       C_DEL: 74}, C_NAME, button_col=C_DEL)
         self.table.itemChanged.connect(self._cell_changed)
         self.table.itemDelegate().closeEditor.connect(self._editor_closed)
         root.addWidget(self.table, 1)
@@ -343,10 +341,7 @@ class SaleInvoiceDialog(EnterSafeDialog):
                 if col == C_QTY and ln["qty"] > ln["stock"]:
                     it.setBackground(QColor("#FEE2E2"))  # more than available stock
                 self.table.setItem(r, col, it)
-            rm = QPushButton("Remove")
-            rm.setObjectName("secondary")
-            rm.setAutoDefault(False)
-            rm.clicked.connect(lambda _=False, i=r: self._remove_line(i))
+            rm = remove_button(lambda _=False, i=r: self._remove_line(i), tooltip="Remove this line from the invoice")
             self.table.setCellWidget(r, C_DEL, rm)
         self._loading = False
         self._recalc()
