@@ -230,3 +230,8 @@ Phone par Outstanding dekhne aur payment reminder bhejne ke liye. Data computer 
 - Category ya Mobile Type badalne par window ka size aur jagah nahi badalti.
 - **Esc** dabane se ab yeh windows band nahi hoti (likha hua data zaya nahi hota). Band karne ke liye Cancel/Close ya X dabayein.
 - Product window mein **Enter** ab agle khane par le jata hai, seedha Save nahi karta (barcode scan ke baad bhi). Save ke liye Save button dabayein.
+
+## Stock Purchase: Select from List, Remove buttons aur headings
+- **Stock Purchase** mein search box ke saath **Select from List** button hai (shortcut **F6**), "+ New Product" se pehle. Poori product list khulti hai; naam, barcode, #tag, ID ya category se search karein, phir Enter ya double-click. Product usi tarah add hota hai jaise search se (phone ho to IMEI, purchase price khud, quantity). Naya product nahi banta.
+- **Remove** buttons ab har jagah ek hi halka laal rang ke hain aur poora lafz "Remove" nazar aata hai (Sale Invoice, Stock Purchase, Labels, Mobile App).
+- Stock Purchase, Sale Invoice aur Return ki tables mein har column heading (jaise "Quantity Purchase") poori nazar aati hai.
