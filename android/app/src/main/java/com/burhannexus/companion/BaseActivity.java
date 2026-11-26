@@ -245,7 +245,7 @@ public class BaseActivity extends Activity {
     private void showStatus() {
         if (statusView == null) return;
         if (!Store.paired(this)) {
-            statusView.setText("Not paired with the computer – tap the menu > Connection");
+            statusView.setText("Not paired – open menu ☰ > Connection");
             statusView.setBackgroundColor(Ui.MUTED);
             return;
         }

@@ -10,8 +10,8 @@ android {
         applicationId "com.burhannexus.companion"
         minSdk 26
         targetSdk 34
-        versionCode 7
-        versionName "3.0.1"
+        versionCode 8
+        versionName "3.0.2"
     }
     // One fixed key for every build, so a new APK installs over the old one (keeps the pairing and data).
     // The key is NOT in the repository: the GitHub workflow writes it from the repository secrets

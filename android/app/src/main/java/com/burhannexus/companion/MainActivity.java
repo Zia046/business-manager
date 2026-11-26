@@ -87,7 +87,7 @@ public class MainActivity extends BaseActivity {
     }
 
     private LinearLayout.LayoutParams half() {
-        return new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1);
+        return new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
     }
 
     @Override

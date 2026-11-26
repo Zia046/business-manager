@@ -125,7 +125,7 @@ public class BusinessActivity extends BaseActivity implements Sync.Listener {
     }
 
     private static LinearLayout.LayoutParams half() {
-        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
     }
 
     private void heading(LinearLayout page, String text) {

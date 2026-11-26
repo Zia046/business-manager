@@ -115,6 +115,7 @@ public final class Ui {
     /** A filled card for one figure of the dashboard: small title, big value, small note. */
     public static LinearLayout statCard(Context c, int color, String title, TextView value, TextView note) {
         LinearLayout l = column(c);
+        l.setMinimumHeight(dp(c, 104));                 // cards side by side stay the same height
         l.setBackground(box(color, dp(c, 14)));
         int p = dp(c, 14);
         l.setPadding(p, p, p, p);
@@ -152,7 +153,8 @@ public final class Ui {
 
     public static View gap(Context c, int dp) {
         View v = new View(c);
-        v.setLayoutParams(new LinearLayout.LayoutParams(dp(c, dp), dp(c, dp)));
+        // a sideways space only: a tall gap would set the row's height and squash the cards beside it
+        v.setLayoutParams(new LinearLayout.LayoutParams(dp(c, dp), 1));
         return v;
     }
 
