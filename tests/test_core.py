@@ -2575,8 +2575,10 @@ class _JavaPhone:
     def __init__(self, classes, jobs):
         import queue, subprocess, threading
         self.jobs, self.lines = jobs, queue.Queue()
-        self.proc = subprocess.Popen(["java", "-cp", str(classes), "SyncHarness"], stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        self.proc = subprocess.Popen(["java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstdin.encoding=UTF-8",
+                                      "-cp", str(classes), "SyncHarness"], stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1,
+                                     encoding="utf-8")
         threading.Thread(target=lambda: [self.lines.put(l) for l in self.proc.stdout], daemon=True).start()
 
     def __call__(self, cmd):

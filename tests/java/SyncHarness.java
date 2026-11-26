@@ -67,6 +67,7 @@ public class SyncHarness {
     };
 
     public static void main(String[] a) throws Exception {
+        System.setOut(new java.io.PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), true, "UTF-8"));
         BufferedReader in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         MemoryStore store = new MemoryStore();
         Engine engine = null;
