@@ -89,7 +89,8 @@ public class DocActivity extends BaseActivity {
             public void beforeTextChanged(CharSequence s, int a, int c, int d) {}
             public void onTextChanged(CharSequence s, int a, int c, int d) {}
             public void afterTextChanged(Editable s) {
-                if (!filling) cashTouched = true;
+                if (filling) return;                     // our own fill-in: no second round (that looped for ever)
+                cashTouched = true;
                 showTotals();
             }
         });
@@ -263,9 +264,15 @@ public class DocActivity extends BaseActivity {
         double total = Engine.total(kind, data());
         totalView.setText(Ui.money(total));
         if (!cashTouched && "sale".equals(kind)) {       // like the computer: a cash sale is paid in full
-            filling = true;
-            cash.setText(Pick.qty(Engine.round2(total)));
-            filling = false;
+            String full = Pick.qty(Engine.round2(total));
+            if (!full.equals(cash.getText().toString())) {
+                filling = true;
+                try {
+                    cash.setText(full);
+                } finally {
+                    filling = false;
+                }
+            }
         }
         double left = total - Pick.num(cash);
         balanceView.setText(customerSide ? ("sale".equals(kind) ? "On credit: " + Ui.money(left) : "Taken off the customer's account: " + Ui.money(left))

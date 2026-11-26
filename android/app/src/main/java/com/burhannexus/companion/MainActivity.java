@@ -95,7 +95,7 @@ public class MainActivity extends BaseActivity {
         super.onResume();
         String crash = App.takeCrash(this);
         if (crash != null) {                                  // the app closed last time: show why
-            final String text = crash;
+            final String text = crash.length() > 6000 ? crash.substring(0, 6000) : crash;
             new android.app.AlertDialog.Builder(this).setTitle("The app closed because of an error")
                     .setMessage("Please send a screenshot of this to the developer.\n\n"
                             + (text.length() > 2500 ? text.substring(0, 2500) : text))

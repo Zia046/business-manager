@@ -25,6 +25,7 @@ public class App extends Application {
                 error.printStackTrace(new PrintWriter(sw));
                 String text = "App " + BuildConfigInfo.version(c) + ", Android " + Build.VERSION.RELEASE + " (API "
                         + Build.VERSION.SDK_INT + "), " + Build.MANUFACTURER + " " + Build.MODEL + "\n\n" + sw;
+                if (text.length() > 6000) text = text.substring(0, 6000) + "\n…";   // a loop error repeats for pages
                 try (FileOutputStream out = new FileOutputStream(new File(c.getFilesDir(), CRASH_FILE))) {
                     out.write(text.getBytes(StandardCharsets.UTF_8));
                 }
