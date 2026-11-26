@@ -2198,7 +2198,7 @@ def test_android_crypto_and_template_match_the_pc(shop, tmp_path):
     from app.services import companion as C, sms_template as T
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = os.path.join(root, "android", "app", "src", "main", "java", "com", "burhannexus", "companion")
-    subprocess.run(["javac", "-d", str(tmp_path), os.path.join(src, "Crypto.java"), os.path.join(src, "Template.java"),
+    subprocess.run(["javac", "-encoding", "UTF-8", "-d", str(tmp_path), os.path.join(src, "Crypto.java"), os.path.join(src, "Template.java"),
                     os.path.join(root, "tests", "java", "Interop.java")], check=True, capture_output=True)
 
     def java(*args):
@@ -2624,7 +2624,7 @@ def java_phone(shop, tmp_path):
     src = os.path.join(root, "android", "app", "src", "main", "java", "com", "burhannexus", "companion")
     files = [os.path.join(src, "Crypto.java")] + [os.path.join(src, "sync", f) for f in os.listdir(os.path.join(src, "sync"))
                                                   if f != "SqliteStore.java"]       # (needs Android itself)
-    subprocess.run(["javac", "-nowarn", "-d", str(tmp_path), *files, os.path.join(root, "tests", "java", "SyncHarness.java")],
+    subprocess.run(["javac", "-encoding", "UTF-8", "-nowarn", "-d", str(tmp_path), *files, os.path.join(root, "tests", "java", "SyncHarness.java")],
                    check=True, capture_output=True)
     db = shop[0]
     jobs = queue.Queue()
