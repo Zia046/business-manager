@@ -235,3 +235,16 @@ Phone par Outstanding dekhne aur payment reminder bhejne ke liye. Data computer 
 - **Stock Purchase** mein search box ke saath **Select from List** button hai (shortcut **F6**), "+ New Product" se pehle. Poori product list khulti hai; naam, barcode, #tag, ID ya category se search karein, phir Enter ya double-click. Product usi tarah add hota hai jaise search se (phone ho to IMEI, purchase price khud, quantity). Naya product nahi banta.
 - **Remove** buttons ab har jagah ek hi halka laal rang ke hain aur poora lafz "Remove" nazar aata hai (Sale Invoice, Stock Purchase, Labels, Mobile App).
 - Stock Purchase, Sale Invoice aur Return ki tables mein har column heading (jaise "Quantity Purchase") poori nazar aati hai.
+
+## Android App 3.0 – Apna database, khud-ba-khud sync (dono taraf)
+
+- Mobile app ab apna alag database rakhti hai. Sale, Sale Return, Purchase, Purchase Return, Receive Payment, Pay Supplier, Expense, naya Customer/Supplier – sab phone par ban sakte hain, **Wi-Fi ke baghair bhi**.
+- Upar ☰ (menu) se tamam hissay khulte hain: Dashboard, Sale, Purchase, Stock, Accounts, Reports, Messages, Settings.
+- Top bar ke neeche status likha hota hai:
+  - "Connected – Auto Sync Active" – computer se juda hua, sab khud chal raha hai
+  - "Offline Mode – Changes Saved Locally" – Wi-Fi nahi, entries phone par mehfooz hain
+  - "Synchronizing Data..." / "Sync Completed" / "Sync Retry Pending"
+- Koi "Sync" button dabana zaroori nahi: app khuli ho to har 30 second, nayi entry ke foran baad, Wi-Fi wapas aate hi, aur app band ho to bhi har 15 minute sync hoti hai. Har entry ki manzoori ki zaroorat nahi.
+- Phone ke bill number alag hote hain: pehla phone MB1-00001, MB1-00002…, doosra phone MB2-… Computer ke INV- number waise hi chalte hain.
+- **Pehli sale se pehle** ek dafa phone ko computer ke sath (same Wi-Fi) sync hone dein – is se phone ko apni number series milti hai.
+- Agar phone aur computer dono ne aakhri piece bech diya to dono sale qaim rehti hain aur stock minus mein dikhata hai (warning ke sath). Agar **ek hi IMEI** dono jagah bik gaya to phone wali entry roki jati hai: Computer par *Mobile App* window mein "Phone entries needing attention" mein nazar aati hai – dekh kar "Dismiss" karein. Phone par bhi menu > Sync & Conflicts mein nazar aati hai.

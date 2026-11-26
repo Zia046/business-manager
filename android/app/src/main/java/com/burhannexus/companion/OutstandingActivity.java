@@ -27,7 +27,12 @@ import java.util.Collections;
 import java.util.List;
 
 /** Everyone with a pending balance: search, sort, filter; tap a row for the ledger. */
-public class OutstandingActivity extends Activity implements Sync.Listener {
+public class OutstandingActivity extends BaseActivity implements Sync.Listener {
+    @Override
+    protected String screenKey() {
+        return "outstanding";
+    }
+
     private final List<JSONObject> shown = new ArrayList<>();
     private EditText search, minAmount;
     private Spinner sort;

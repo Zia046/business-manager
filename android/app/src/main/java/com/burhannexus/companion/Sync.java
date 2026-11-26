@@ -44,13 +44,21 @@ public final class Sync {
         });
     }
 
+    private static final com.burhannexus.companion.sync.Engine.Listener ENGINE_STATE = s -> notifyListeners();
+
     /** Fetch everything from the PC. A failure changes only the status; the saved data stays as it is. */
     public static void now(Context context) {
         final Context c = context.getApplicationContext();
-        if (!Store.paired(c) || state == RUNNING) return;
+        if (!Store.paired(c)) return;
+        if (state == RUNNING) { again = true; return; }       // a new entry during a sync: one more round after it
+        again = false;
         state = RUNNING;
         notifyListeners();
         pool.execute(() -> {
+            // 1. two-way sync of the phone's own database (transactions both ways)
+            Local.engine(c).addListener(ENGINE_STATE);
+            Local.engine(c).sync(Local.transport(c));
+            // 2. the Outstanding / reminder / business figures screens
             try {
                 Object data = Api.call(c, "sync", null);
                 Store.saveData(c, (JSONObject) data);
@@ -66,6 +74,21 @@ public final class Sync {
             }
             state = IDLE;
             notifyListeners();
+            if (again) main.post(() -> now(c));
+        });
+    }
+
+    private static volatile boolean again;
+
+    private static final Runnable[] pendingLater = new Runnable[1];
+
+    /** Sync in `ms` milliseconds (several requests close together become one). */
+    public static void later(Context context, long ms) {
+        final Context c = context.getApplicationContext();
+        main.post(() -> {
+            if (pendingLater[0] != null) main.removeCallbacks(pendingLater[0]);
+            pendingLater[0] = () -> { pendingLater[0] = null; now(c); };
+            main.postDelayed(pendingLater[0], ms);
         });
     }
 

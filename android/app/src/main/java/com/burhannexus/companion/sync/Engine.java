@@ -401,6 +401,8 @@ public final class Engine {
     /** Documents of one type for history screens, newest first: the computer's ones and the phone's unsent ones. */
     public List<Map<String, Object>> documents(String docKind) {
         List<Map<String, Object>> out = new ArrayList<>();
+        Map<String, String> names = null;
+        Map<String, Map<String, Object>> prods = null;
         for (Map<String, Object> r : list(docKind)) {
             r.put("sync", "synced");
             out.add(r);
@@ -410,12 +412,13 @@ public final class Engine {
             String dk = docKindOf(o.kind);
             if (!docKind.equals(dk)) continue;
             Map<String, Object> d = Json.obj(o.data);
+            if (names == null) names = partyNames();
             Map<String, Object> r = new LinkedHashMap<>(d);
             r.put("id", "op:" + o.opId);
             r.put("no", !o.docNo.isEmpty() ? o.docNo : Json.txt(d.get("no")).isEmpty() ? "(new)" : d.get("no"));
             r.put("date", o.madeAt);
             r.put("total", "voucher".equals(dk) || "expense".equals(dk) ? Json.num(d.get("amount")) : total(o.kind, d));
-            r.put("party", partyName(d.get("party_id")));
+            r.put("party", d.get("party_id") == null ? "" : Json.txt(names.get(key(d.get("party_id")))));
             r.put("op_kind", o.kind);
             r.put("status", "active");
             r.put("sync", Op.CONFLICT.equals(o.status) ? "conflict" : "pending");
@@ -423,7 +426,7 @@ public final class Engine {
             if ("return".equals(dk)) r.put("kind", "sale_return".equals(o.kind) ? "sale" : "purchase");
             if ("voucher".equals(dk)) r.put("kind", "receipt".equals(o.kind) ? "receipt" : "payment");
             List<Object> lines = new ArrayList<>();
-            Map<String, Map<String, Object>> prods = productNames();
+            if (prods == null) prods = productNames();
             for (Object it : Json.list(d.get("items"))) {
                 Map<String, Object> l = new LinkedHashMap<>(Json.map(it));
                 Map<String, Object> p = prods.get(key(l.get("product_id")));
@@ -451,6 +454,16 @@ public final class Engine {
     private Map<String, Map<String, Object>> productNames() {
         Map<String, Map<String, Object>> m = new HashMap<>();
         for (Map<String, Object> p : list("product")) m.put(String.valueOf(Json.lng(p.get("id"))), p);
+        return m;
+    }
+
+    private Map<String, String> partyNames() {
+        Map<String, String> m = new HashMap<>();
+        for (String kind : new String[] {"customer", "supplier"}) {
+            for (Map.Entry<String, Map<String, Object>> e : parties(kind).entrySet()) {
+                m.put(e.getKey(), Json.txt(e.getValue().get("name")));
+            }
+        }
         return m;
     }
 

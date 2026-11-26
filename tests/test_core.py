@@ -2620,7 +2620,8 @@ def java_phone(shop, tmp_path):
     from app.services.companion_server import CompanionServer
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = os.path.join(root, "android", "app", "src", "main", "java", "com", "burhannexus", "companion")
-    files = [os.path.join(src, "Crypto.java")] + [os.path.join(src, "sync", f) for f in os.listdir(os.path.join(src, "sync"))]
+    files = [os.path.join(src, "Crypto.java")] + [os.path.join(src, "sync", f) for f in os.listdir(os.path.join(src, "sync"))
+                                                  if f != "SqliteStore.java"]       # (needs Android itself)
     subprocess.run(["javac", "-nowarn", "-d", str(tmp_path), *files, os.path.join(root, "tests", "java", "SyncHarness.java")],
                    check=True, capture_output=True)
     db = shop[0]

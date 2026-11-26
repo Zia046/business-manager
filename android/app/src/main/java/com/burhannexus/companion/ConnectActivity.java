@@ -15,7 +15,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Pairing with the Windows Business Manager: the PC is found on the Wi-Fi, the user types the 6-digit code. */
-public class ConnectActivity extends Activity {
+public class ConnectActivity extends BaseActivity {
+    @Override
+    protected String screenKey() {
+        return "connect";
+    }
+
     private TextView status;
     private EditText code;
     private Button pair;

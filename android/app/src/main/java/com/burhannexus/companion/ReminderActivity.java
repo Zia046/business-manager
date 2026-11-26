@@ -21,7 +21,12 @@ import java.util.List;
  * message after another is opened in the phone's SMS app; the user presses Send there each time.
  * Nothing is ever sent silently.
  */
-public class ReminderActivity extends Activity {
+public class ReminderActivity extends BaseActivity {
+    @Override
+    protected String screenKey() {
+        return "reminders";
+    }
+
     private final List<JSONObject> eligible = new ArrayList<>();
     private final List<CheckBox> boxes = new ArrayList<>();
     private final List<JSONObject> queue = new ArrayList<>();

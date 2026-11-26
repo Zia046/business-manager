@@ -31,13 +31,22 @@ jobs:
           KEY_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           if [ -z "$KEY_B64" ] || [ -z "$KEY_PW" ]; then
-            echo "::error::Add the secrets ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions), then run this workflow again."
-            exit 1
+            echo "NO_SIGNING_KEY=1" >> "$GITHUB_ENV"
+            exit 0
           fi
           echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/companion-signing.p12"
           echo "BN_KEYSTORE_FILE=$RUNNER_TEMP/companion-signing.p12" >> "$GITHUB_ENV"
           echo "::add-mask::$KEY_PW"
           echo "BN_KEYSTORE_PASSWORD=$KEY_PW" >> "$GITHUB_ENV"
+
+      # without the key the code is still compiled (so mistakes show), but no APK is published
+      - name: Compile only (signing key missing)
+        if: env.NO_SIGNING_KEY == '1'
+        working-directory: android
+        run: |
+          gradle --no-daemon compileDebugJavaWithJavac
+          echo "::error::Code compiles. Add the secrets ANDROID_KEYSTORE_B64 and ANDROID_KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions), then run this workflow again to get the APK."
+          exit 1
 
       - name: Build the APK
         working-directory: android

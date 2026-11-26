@@ -14,7 +14,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** Outstanding SMS Template Settings: the same message as on the PC. Saving needs the PC to be reachable. */
-public class TemplateActivity extends Activity {
+public class TemplateActivity extends BaseActivity {
+    @Override
+    protected String screenKey() {
+        return "template";
+    }
+
     private static final String[] KEYS = {"business_name", "contact", "account_name", "easypaisa", "jazzcash", "other"};
     private static final String[] LABELS = {"Business Name", "Business Contact Number", "Payment Account Name",
             "Easypaisa Number", "JazzCash Number", "Other Payment Instructions"};

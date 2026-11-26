@@ -32,6 +32,11 @@ public class App extends Application {
             }
             if (previous != null) previous.uncaughtException(thread, error);
         });
+        try {
+            SyncJob.schedule(c);
+            SyncJob.watchNetwork(c);
+        } catch (Throwable ignored) {               // background sync is a help, never a reason to stop the app
+        }
     }
 
     /** The saved error text, or null. Reading it deletes it. */

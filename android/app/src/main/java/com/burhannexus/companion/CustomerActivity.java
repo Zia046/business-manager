@@ -11,7 +11,12 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** One customer: figures, SEND PAYMENT REMINDER, and the complete ledger with the payment history. */
-public class CustomerActivity extends Activity {
+public class CustomerActivity extends BaseActivity {
+    @Override
+    protected String screenKey() {
+        return "outstanding";
+    }
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);

@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Local Wi-Fi only. The traffic is plain HTTP on the LAN, but every request and answer is encrypted by
          the app itself (AES-256-GCM with the key made at pairing), so cleartext HTTP carries no readable data. -->
@@ -33,5 +34,11 @@
         <activity android:name=".ConnectActivity" android:parentActivityName=".MainActivity" />
         <activity android:name=".BusinessActivity" android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="stateHidden|adjustResize" />
+        <activity android:name=".DocActivity" android:windowSoftInputMode="stateHidden|adjustResize" />
+        <activity android:name=".MoneyActivity" android:windowSoftInputMode="stateHidden|adjustResize" />
+        <activity android:name=".ListActivity" android:windowSoftInputMode="stateHidden|adjustResize" />
+        <activity android:name=".DetailActivity" />
+        <service android:name=".SyncJob" android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

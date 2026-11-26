@@ -17,7 +17,12 @@ import org.json.JSONObject;
  * One section of the business figures sent by the PC at the last sync: stock, mobiles in hand, sales, purchases,
  * money, activity. Every page says when the figures were taken and shows OFFLINE when the PC was not reached.
  */
-public class BusinessActivity extends Activity implements Sync.Listener {
+public class BusinessActivity extends BaseActivity implements Sync.Listener {
+    @Override
+    protected String screenKey() {
+        return "biz:" + getIntent().getStringExtra("section");
+    }
+
     public static final String STOCK = "stock", MOBILES = "mobiles", SALES = "sales", PURCHASES = "purchases",
             FINANCE = "finance", ACTIVITY = "activity";
     private static final int MOBILE_ROWS = 150;

@@ -6,7 +6,7 @@ import threading
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (QCheckBox, QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout)
 
-from ..services import companion
+from ..services import companion, sync_hub
 from ..services.companion_server import CompanionServer, local_addresses
 from .theme import C_GREEN, C_RED, NAVY
 from .widgets import make_table, set_row
@@ -74,8 +74,10 @@ class CompanionDialog(QDialog):
         self.resize(640, 560)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
-        intro = QLabel("The Android app shows your Outstanding list on your phone and sends payment reminders. "
-                       "It reads the data from this computer over your own Wi-Fi; nothing goes to the internet.")
+        intro = QLabel("The Android app keeps its own copy of your business and can make sales, purchases, "
+                       "returns, payments and expenses, also without Wi-Fi. Whenever the phone and this computer "
+                       "are on the same Wi-Fi they exchange the new entries by themselves (both ways). "
+                       "Nothing goes to the internet.")
         intro.setWordWrap(True)
         lay.addWidget(intro)
         self.enable = QCheckBox("Allow the Android app to connect (same Wi-Fi only)")
@@ -98,6 +100,20 @@ class CompanionDialog(QDialog):
         lay.addWidget(QLabel("<b>Paired phones</b>"))
         self.table = make_table(["Phone", "Paired on"], stretch_col=0)
         lay.addWidget(self.table, 1)
+        self.conf_label = QLabel("")
+        lay.addWidget(self.conf_label)
+        self.conf_table = make_table(["Received", "Entry", "Phone", "Why it was kept aside"], stretch_col=3)
+        self.conf_table.setMaximumHeight(170)
+        lay.addWidget(self.conf_table)
+        self.dismiss_btn = QPushButton("Dismiss Selected Entry")
+        self.dismiss_btn.setAutoDefault(False)
+        self.dismiss_btn.clicked.connect(self._dismiss)
+        crow = QHBoxLayout()
+        crow.addWidget(self.dismiss_btn)
+        crow.addStretch()
+        lay.addLayout(crow)
+        self._conflicts = None
+
         row = QHBoxLayout()
         remove = QPushButton("Remove Selected Phone")
         remove.setObjectName("remove")
@@ -140,7 +156,41 @@ class CompanionDialog(QDialog):
             companion.remove_device(self.db, dev["id"])
             self._refresh()
 
+    _KIND = {"sale": "Sale", "sale_return": "Sale return", "purchase": "Purchase", "purchase_return":
+             "Purchase return", "receipt": "Payment received", "supplier_payment": "Supplier payment",
+             "expense": "Expense", "customer_add": "New customer", "supplier_add": "New supplier"}
+
+    def _dismiss(self):
+        sel = self.conf_table.selectionModel().selectedRows()
+        if not sel:
+            QMessageBox.information(self, "Mobile App", "Select an entry first.")
+            return
+        c = self._conflicts[sel[0].row()]
+        if QMessageBox.question(self, "Dismiss", "This phone entry was NOT added to your books. Dismiss it? "
+                                "(Make it again by hand if it is still needed.)") == QMessageBox.Yes:
+            sync_hub.dismiss_conflict(self.db, c["op_id"])
+            self._conflicts = None
+            self._refresh()
+
+    def _show_conflicts(self):
+        rows = sync_hub.conflicts(self.db)
+        if self._conflicts is not None and [r["op_id"] for r in rows] == [r["op_id"] for r in self._conflicts]:
+            return
+        self._conflicts = rows
+        names = {d["id"]: d["name"] for d in companion.devices(self.db)}
+        self.conf_label.setText(f"<b>Phone entries needing attention: {len(rows)}</b>" + (
+            f" <span style='color:{C_RED}'>- these were not added to your books</span>" if rows else
+            " <span style='color:#64748B'>- none, every entry from the phones was accepted</span>"))
+        self.conf_table.setRowCount(len(rows))
+        for i, r in enumerate(rows):
+            entry = self._KIND.get(r["kind"], r["kind"]) + (f" {r.get('doc_no') or r['data'].get('no')}" if (r.get("doc_no") or r["data"].get("no")) else "")
+            set_row(self.conf_table, i, [(r["received_at"] or "")[:16], entry,
+                                         names.get(r["device_id"], r["device_id"][:8]), r["message"] or ""])
+        self.conf_table.setVisible(bool(rows))
+        self.dismiss_btn.setVisible(bool(rows))
+
     def _refresh(self):
+        self._show_conflicts()
         srv = self.service.server
         if srv.running():
             addrs = ", ".join(local_addresses()) or "no network found"

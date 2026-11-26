@@ -315,3 +315,28 @@ def test_other_remove_buttons_share_the_red_style(db, qapp):
 def _check_fits_window(dlg):
     area = dlg.screen().availableGeometry()
     assert dlg.width() <= area.width() and dlg.height() <= area.height()
+
+
+def test_mobile_app_window_lists_and_dismisses_phone_conflicts(db, qapp, monkeypatch):
+    from types import SimpleNamespace
+    from app.services import sync_hub
+    from app.ui import companion_ui
+    sync_hub.push(db, "dev-ui-1", "MB1", [{"op_id": "dev-ui-0001", "kind": "receipt", "made_at": "2026-11-26T10:00:00",
+                                            "data": {"party_id": 99999, "amount": 50}}])
+    server = SimpleNamespace(running=lambda: False, error="", http_port=47820)
+    pairing = SimpleNamespace(active=lambda: False)
+    service = SimpleNamespace(window=SimpleNamespace(db=db), server=server, pairing=pairing,
+                              set_enabled=lambda on: False)
+    dlg = companion_ui.CompanionDialog(service)
+    dlg.show()
+    qapp.processEvents()
+    _shot(dlg, "mobile_app_conflicts")
+    assert dlg.conf_table.rowCount() == 1 and dlg.dismiss_btn.isVisible()
+    assert "Payment received" in dlg.conf_table.item(0, 1).text()
+    dlg.conf_table.selectRow(0)
+    monkeypatch.setattr(QtWidgets.QMessageBox, "question", lambda *a, **k: QtWidgets.QMessageBox.Yes)
+    dlg._dismiss()
+    assert dlg.conf_table.rowCount() == 0 and not dlg.dismiss_btn.isVisible()
+    assert sync_hub.conflicts(db) == []
+    dlg.timer.stop()
+    dlg.close()
