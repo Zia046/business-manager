@@ -2564,3 +2564,220 @@ def test_sync_through_the_encrypted_api(shop):
     man = phone.ask(db, "sync_manifest")["data"]
     assert len(man["invoice"]) == 1
     assert phone.ask(db, "sync_fetch", want={"invoice": [man["invoice"][0][0]]})["data"]["invoice"][0]["no"] == "MB1-00001"
+
+
+# ---------- the Android sync engine (Java) against the real Windows program: the 7 scenarios ----------
+class _JavaPhone:
+    """Runs android/.../sync/Engine.java on a desktop JVM (tests/java/SyncHarness.java) and talks to it.
+    While it waits for an answer it also does the Windows program's work (the server hands jobs to this thread,
+    like the real program's main thread)."""
+
+    def __init__(self, classes, jobs):
+        import queue, subprocess, threading
+        self.jobs, self.lines = jobs, queue.Queue()
+        self.proc = subprocess.Popen(["java", "-cp", str(classes), "SyncHarness"], stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        threading.Thread(target=lambda: [self.lines.put(l) for l in self.proc.stdout], daemon=True).start()
+
+    def __call__(self, cmd):
+        import json, queue
+        self.proc.stdin.write(cmd + "\n")
+        self.proc.stdin.flush()
+        while True:
+            try:
+                return json.loads(self.lines.get(timeout=0.01))
+            except queue.Empty:
+                pass
+            try:
+                job, box = self.jobs.get_nowait()
+            except queue.Empty:
+                continue
+            try:
+                box["result"] = job()
+            except BaseException as exc:
+                box["error"] = exc
+            box["done"].set()
+
+    def out(self, cmd):
+        r = self(cmd)
+        assert r["ok"], (cmd, r)
+        return r["out"]
+
+    def record(self, kind, data):
+        import json
+        return self(f"record {kind} {json.dumps(data)}")
+
+    def close(self):
+        self.proc.kill()
+
+
+@pytest.fixture
+def java_phone(shop, tmp_path):
+    import queue, shutil, subprocess, threading
+    if not shutil.which("javac"):
+        pytest.skip("no Java compiler here")
+    from app.services import companion as C
+    from app.services.companion_server import CompanionServer
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = os.path.join(root, "android", "app", "src", "main", "java", "com", "burhannexus", "companion")
+    files = [os.path.join(src, "Crypto.java")] + [os.path.join(src, "sync", f) for f in os.listdir(os.path.join(src, "sync"))]
+    subprocess.run(["javac", "-nowarn", "-d", str(tmp_path), *files, os.path.join(root, "tests", "java", "SyncHarness.java")],
+                   check=True, capture_output=True)
+    db = shop[0]
+    jobs = queue.Queue()
+
+    def run(job):
+        if threading.current_thread() is threading.main_thread():
+            return job()
+        box = {"done": threading.Event()}
+        jobs.put((job, box))
+        assert box["done"].wait(20)
+        if "error" in box:
+            raise box["error"]
+        return box["result"]
+
+    pairing = C.Pairing()
+    srv = CompanionServer(run, lambda: db, pairing, http_port=0, discovery_port=0, host="127.0.0.1")
+    assert srv.start()
+    phone = _JavaPhone(tmp_path, jobs)
+    assert phone.out(f"pair 127.0.0.1 {srv.http_port} {pairing.start()} androidtest01") == "paired"
+    yield phone
+    phone.close()
+    srv.stop()
+
+
+def _by(rows, key, value):
+    return next(r for r in rows if r[key] == value)
+
+
+def test_android_scenarios_against_windows(shop, java_phone):
+    import json
+    db, sup, cust, prod = shop
+    ph = java_phone
+    tecno = masters.add_product(db, "Tecno Spark 20", 30000, category="Mobile Phone", mobile_type="smartphone",
+                                ram_gb=8, storage_gb=128)
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 10, "price": 100},
+                                      {"product_id": tecno, "qty": 2, "price": 25000, "serials": [P1, P2]}], paid=50000)
+    assert ph.out("sync").startswith("true")
+    assert ph.out("state") == "Connected – Auto Sync Active"
+    stock = lambda pid: _by(ph.out("products"), "id", pid)["qty"]
+    bal = lambda kind, pid: _by(ph.out("parties " + kind), "id", pid)["balance"]
+    assert stock(prod) == 10 and len(ph.out(f"phones {tecno}")) == 2
+
+    # Scenario 1: a sale on Android reaches Windows; stock and customer balance follow
+    r = ph.out("record sale " + json.dumps({"party_id": cust, "items": [{"product_id": prod, "qty": 2, "price": 150}],
+                                            "paid": 100}))
+    assert r["no"] == "MB1-00001"
+    assert stock(prod) == 8 and bal("customer", cust) == 200                    # shown on the phone at once
+    assert _by(ph.out("docs invoice"), "no", "MB1-00001")["sync"] == "pending"
+    ph.out("sync")
+    inv = db.one("SELECT * FROM invoices WHERE no='MB1-00001'")
+    assert inv and inv["total"] == 300 and inv["paid"] == 100
+    assert stock_qty(db.conn, prod) == 8
+    assert {r["id"]: r["balance"] for r in reports.all_balances(db, "customer")["rows"]}[cust] == 200
+    assert reports.dashboard(db)["today_sales"] >= 300                          # Windows dashboard figures
+    assert stock(prod) == 8 and bal("customer", cust) == 200                    # not counted twice after sync
+    assert _by(ph.out("docs invoice"), "no", "MB1-00001")["sync"] == "synced"
+
+    # Scenario 2: a purchase on Windows reaches Android
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 5, "price": 100}], paid=500)
+    ph.out("sync")
+    assert stock(prod) == 13 and any(d["total"] == 500 for d in ph.out("docs purchase"))
+
+    # Scenario 3: a sales return on Android (a phone with its IMEI too)
+    trading.create_invoice(db, cust, [{"product_id": tecno, "qty": 1, "price": 30000, "serial": P1}], paid=30000)
+    ph.out("sync")
+    assert len(ph.out(f"phones {tecno}")) == 1
+    ph.out("record sale_return " + json.dumps({"party_id": cust, "items": [
+        {"product_id": prod, "qty": 1, "price": 150}, {"product_id": tecno, "qty": 1, "price": 30000, "serial": P1}],
+        "refunded": 30000}))
+    assert stock(prod) == 14 and len(ph.out(f"phones {tecno}")) == 2 and bal("customer", cust) == 50
+    ph.out("sync")
+    assert stock_qty(db.conn, prod) == 14 and db.one("SELECT status FROM serials WHERE serial=?", (P1,))["status"] == "in_stock"
+    assert {r["id"]: r["balance"] for r in reports.all_balances(db, "customer")["rows"]}[cust] == 50
+    assert stock(prod) == 14 and bal("customer", cust) == 50
+
+    # Scenario 4: a purchase return on Windows reaches Android
+    sup_before = bal("supplier", sup)
+    trading.purchase_return(db, sup, [{"product_id": prod, "qty": 3, "price": 100}], received=0)
+    ph.out("sync")
+    assert stock(prod) == 11 and bal("supplier", sup) == sup_before - 300
+
+    # Scenario 5: computer off; sales, purchases, returns, payments, expense and a new customer on the phone
+    ph.out("offline true")
+    assert ph.out("sync").startswith("false")
+    assert ph.out("state") in ("Offline Mode – Changes Saved Locally", "Sync Retry Pending")
+    new = ph.out("record customer_add " + json.dumps({"name": "Kamran", "phone": "03001234567"}))
+    kam = {"op": new["op_id"]}
+    for kind, data in [
+        ("sale", {"party_id": kam, "items": [{"product_id": prod, "qty": 3, "price": 150}], "paid": 0}),
+        ("receipt", {"party_id": kam, "amount": 100}),
+        ("purchase", {"party_id": sup, "items": [{"product_id": prod, "qty": 6, "price": 100},
+                                                  {"product_id": tecno, "qty": 1, "price": 24000, "serials": [[P3]]}],
+                      "paid": 0}),
+        ("purchase_return", {"party_id": sup, "items": [{"product_id": prod, "qty": 1, "price": 100}]}),
+        ("supplier_payment", {"party_id": sup, "amount": 1000}),
+        ("expense", {"category": "Tea", "amount": 50}),
+    ]:
+        assert ph.record(kind, data)["ok"], (kind, ph.record)
+    kam_key = "op:" + new["op_id"]
+    assert stock(prod) == 11 - 3 + 6 - 1 and bal("customer", kam_key) == 350
+    assert len(ph.out(f"phones {tecno}")) == 3
+    ph.out("restart")                                                           # app closed and opened again
+    assert stock(prod) == 13 and len([o for o in ph.out("ops") if o["status"] == "pending"]) == 7
+    ph.out("offline false")
+    assert ph.out("sync").startswith("true")
+    assert all(o["status"] == "done" for o in ph.out("ops")), ph.out("ops")
+    k = db.one("SELECT id FROM parties WHERE name='Kamran'")["id"]
+    assert {r["id"]: r["balance"] for r in reports.all_balances(db, "customer")["rows"]}[k] == 350
+    assert stock_qty(db.conn, prod) == 13 and db.one("SELECT status FROM serials WHERE serial=?", (P3,))["status"] == "in_stock"
+    assert db.scalar("SELECT COUNT(*) FROM expenses WHERE category='Tea'") == 1
+    assert stock(prod) == 13 and bal("customer", k) == 350
+    assert not any(p["id"] == kam_key for p in ph.out("parties customer"))   # the phone's temporary copy is gone
+
+    # Scenario 6: both work while disconnected, then meet
+    ph.out("offline true")
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 4, "price": 150}], paid=600)   # Windows sells 4
+    trading.create_invoice(db, cust, [{"product_id": tecno, "qty": 1, "price": 30000, "serial": P2}], paid=30000)
+    assert ph.record("sale", {"party_id": cust, "items": [{"product_id": prod, "qty": 5, "price": 150}],
+                              "paid": 750})["ok"]                                # the phone sells 5
+    assert ph.record("sale", {"party_id": cust, "items": [{"product_id": tecno, "qty": 1, "price": 29000,
+                                                           "serial": P2}], "paid": 29000})["ok"]   # same IMEI!
+    ph.out("offline false")
+    ph.out("sync")
+    assert stock_qty(db.conn, prod) == 13 - 4 - 5 and stock(prod) == 4          # both sales kept, same result
+    ops = ph.out("ops")
+    assert [o["status"] for o in ops[-2:]] == ["done", "conflict"]              # double-sold phone: owner decides
+    assert "already sold" in ops[-1]["message"]
+    from app.services import sync_hub
+    assert len(sync_hub.conflicts(db)) == 1                                       # kept on Windows too
+    nos = [r["no"] for r in db.query("SELECT no FROM invoices ORDER BY id")]
+    assert len(nos) == len(set(nos)) and "MB1-00003" in nos and "MB1-00004" not in nos
+
+    # Scenario 7: the connection breaks after the computer saved the push but before the phone got the answer
+    assert ph.record("sale", {"party_id": cust, "items": [{"product_id": prod, "qty": 1, "price": 150}], "paid": 150})["ok"]
+    ph.out("break_after sync_push")
+    assert ph.out("sync").startswith("false")
+    assert ph.out("state") == "Sync Retry Pending"
+    assert stock(prod) == 3                                                      # counted once, not twice
+    assert ph.out("sync").startswith("true")                                     # retry: answered from the inbox
+    assert db.scalar("SELECT COUNT(*) FROM invoices WHERE no='MB1-00005'") == 1 and stock_qty(db.conn, prod) == 3
+    assert stock(prod) == 3
+    ph.out("break_after sync_fetch")                                             # broken in the middle of the pull
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 3, "price": 150}], paid=450)
+    assert ph.out("sync").startswith("false") and stock(prod) == 3               # nothing half-saved
+    assert ph.out("sync").startswith("true") and stock(prod) == 0
+
+    # what the phone refuses, like Windows does
+    for kind, data in [("sale", {"party_id": cust, "items": [{"product_id": prod, "qty": 1, "price": 150}], "paid": 150}),
+                       ("sale", {"party_id": 1, "items": [{"product_id": tecno, "qty": 1, "price": 1, "serial": P3}],
+                                 "paid": 0}),
+                       ("purchase", {"party_id": sup, "items": [{"product_id": tecno, "qty": 1, "price": 1,
+                                                                 "serials": [[P3]]}], "paid": 0}),
+                       ("receipt", {"party_id": cust, "amount": 0})]:
+        r = ph.record(kind, data)
+        assert not r["ok"] and r.get("invalid"), (kind, r)
+    d = ph.out("dashboard")
+    assert d["conflicts"] == 1 and d["unsent"] == 0 and d["phones_in_stock"] == reports.dashboard(db)["phones_in_stock"] == 2
+    w = reports.dashboard(db)
+    assert d["today_sales"] == w["today_sales"] and d["receivable"] == reports.all_balances(db, "customer")["total"]

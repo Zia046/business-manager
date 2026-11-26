@@ -333,7 +333,11 @@ def _hub():
 
 def _op_sync_hello(db, args, dev):
     """Start of a two-way sync: this phone's invoice series and the computer's clock."""
-    return {"series": _series(db, dev), "server_id": state(db)["server_id"], "shop": hello(db)["shop"],
+    series = _series(db, dev)
+    nums = [r["no"] for r in db.query("SELECT no FROM invoices WHERE no LIKE ?", (series + "-%",))]
+    nums += [r["doc_no"] for r in db.query("SELECT doc_no FROM sync_inbox WHERE doc_no LIKE ?", (series + "-%",))]
+    last = max((int(n.split("-")[1]) for n in nums if n.split("-")[1].isdigit()), default=0)
+    return {"series": series, "series_last": last, "server_id": state(db)["server_id"], "shop": hello(db)["shop"],
             "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "api": API_VERSION}
 
 
