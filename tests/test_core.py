@@ -663,7 +663,7 @@ def test_migration_from_old_database():
     assert conn.execute("SELECT imei2 FROM serials").fetchone()["imei2"] is None
     assert conn.execute("SELECT serial2 FROM invoice_items").fetchall() == []
     assert conn.execute("SELECT COUNT(*) AS n FROM categories").fetchone()["n"] == 5
-    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 5
+    assert conn.execute("PRAGMA user_version").fetchone()["user_version"] == 6
     assert conn.execute("SELECT COUNT(*) AS n FROM repairs").fetchone()["n"] == 0
     for table in ("used_phones", "loan_people", "loan_entries"):          # added later: old data is untouched
         assert conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"] == 0
@@ -2437,3 +2437,130 @@ def test_business_overview_matches_the_windows_figures(shop):
     assert phone.ask(db, "overview")["data"]["finance"]["receivables"] == 9800
     PH.remove_phone(db, rows[P1]["serial_id"], "lost")                          # follows every change
     assert phone.ask(db, "overview")["data"]["mobiles"]["total"] == 1
+
+
+# ---------- two-way sync with the Android app: the computer's side ----------
+def _op(op_id, kind, data, made_at="2026-11-26 10:00:00"):
+    return {"op_id": op_id, "kind": kind, "made_at": made_at, "data": data}
+
+
+def test_sync_push_applies_phone_transactions_with_windows_rules(shop):
+    from app.services import sync_hub as H
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 5, "price": 100}], paid=500)
+    ops = [
+        _op("dev1-0001", "customer_add", {"name": "Kamran", "phone": "03001234567"}),
+        _op("dev1-0002", "sale", {"no": "MB1-00001", "party_id": {"op": "dev1-0001"},
+                                  "items": [{"product_id": prod, "qty": 2, "price": 150}], "paid": 100}),
+        _op("dev1-0003", "receipt", {"party_id": {"op": "dev1-0001"}, "amount": 20}),
+        _op("dev1-0004", "sale_return", {"party_id": {"op": "dev1-0001"},
+                                         "items": [{"product_id": prod, "qty": 1, "price": 150}]}),
+        _op("dev1-0005", "purchase", {"party_id": sup, "items": [{"product_id": prod, "qty": 10, "price": 110}],
+                                      "paid": 1100}),
+        _op("dev1-0006", "purchase_return", {"party_id": sup, "items": [{"product_id": prod, "qty": 3, "price": 110}]}),
+        _op("dev1-0007", "supplier_payment", {"party_id": sup, "amount": 100}),
+        _op("dev1-0008", "expense", {"category": "Tea", "amount": 80, "note": "from phone"}),
+    ]
+    res = H.push(db, "dev1", "MB1", ops)
+    assert [r["status"] for r in res] == ["applied"] * 8, res
+    kamran = res[0]["doc_id"]
+    inv = db.one("SELECT * FROM invoices WHERE no='MB1-00001'")
+    assert inv and inv["party_id"] == kamran and inv["date"] == "2026-11-26 10:00:00" and inv["paid"] == 100
+    assert stock_qty(db.conn, prod) == 5 - 2 + 1 + 10 - 3
+    bal = {r["id"]: r["balance"] for r in reports.all_balances(db, "customer")["rows"]}
+    assert bal[kamran] == 300 - 100 - 20 - 150
+    sb = {r["id"]: r["balance"] for r in reports.all_balances(db, "supplier")["rows"]}
+    assert sb[sup] == -330 - 100                                          # returned 330 after paying, then paid 100
+    assert db.scalar("SELECT COUNT(*) FROM expenses WHERE note='from phone'") == 1
+    # the computer's own numbering is untouched by the phone's series
+    assert trading.suggest_invoice_no(db) == "INV-00001"
+    pc = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 150}], paid=150)
+    assert db.one("SELECT no FROM invoices WHERE id=?", (pc,))["no"] == "INV-00001"
+    # the same transactions sent again (connection broke before the answer): nothing is applied twice
+    again = H.push(db, "dev1", "MB1", ops)
+    assert [r["doc_id"] for r in again] == [r["doc_id"] for r in res]
+    assert stock_qty(db.conn, prod) == 10 and db.scalar("SELECT COUNT(*) FROM invoices") == 2
+
+
+def test_sync_push_keeps_conflicts_and_allows_real_shortage(shop):
+    from app.services import sync_hub as H
+    db, sup, cust, prod = shop
+    phone = masters.add_product(db, "Tecno Spark", 30000, category="Mobile Phone", mobile_type="smartphone",
+                                ram_gb=8, storage_gb=128)
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 1, "price": 100},
+                                      {"product_id": phone, "qty": 1, "price": 25000, "serials": [P1]}], paid=25100)
+    # the computer sells the last accessory and the phone while the phone app is offline...
+    trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 150},
+                                      {"product_id": phone, "qty": 1, "price": 30000, "serial": P1}], paid=30150)
+    # ...and the phone app sold them too
+    res = H.push(db, "dev1", "MB1", [
+        _op("dev1-0101", "sale", {"no": "MB1-00001", "party_id": cust,
+                                  "items": [{"product_id": prod, "qty": 1, "price": 150}], "paid": 150}),
+        _op("dev1-0102", "sale", {"no": "MB1-00002", "party_id": cust,
+                                  "items": [{"product_id": phone, "qty": 1, "price": 30000, "serial": P1}], "paid": 30000}),
+        _op("dev1-0103", "receipt", {"party_id": {"op": "dev1-9999"}, "amount": 5}),
+        _op("dev1-0104", "sale", {"no": "INV-00099", "party_id": cust, "items": [], "paid": 0}),
+        {"op_id": "x", "kind": "sale"},
+    ])
+    assert res[0]["status"] == "applied" and "below zero" in res[0]["message"]     # sale kept; shortage visible
+    assert stock_qty(db.conn, prod) == -1
+    assert res[1]["status"] == "conflict" and "already sold" in res[1]["message"]  # same IMEI: owner decides
+    assert res[2]["status"] == "conflict" and res[3]["status"] == "conflict" and res[4]["status"] == "conflict"
+    assert db.scalar("SELECT COUNT(*) FROM invoices WHERE no='MB1-00002'") == 0
+    con = H.conflicts(db)
+    assert {c["op_id"] for c in con} == {"dev1-0102", "dev1-0103", "dev1-0104"}
+    assert next(c for c in con if c["op_id"] == "dev1-0102")["data"]["items"][0]["serial"] == P1   # kept in full
+    H.dismiss_conflict(db, "dev1-0102")
+    assert {c["op_id"] for c in H.conflicts(db)} == {"dev1-0103", "dev1-0104"}
+    assert len(H.conflicts(db, include_dismissed=True)) == 3
+    # a conflict sent again stays a conflict (never applied behind the owner's back)
+    assert H.push(db, "dev1", "MB1", [_op("dev1-0102", "sale", {})])[0]["status"] == "dismissed"
+
+
+def test_sync_pull_is_incremental_and_follows_changes(shop):
+    from app.services import sync_hub as H
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 4, "price": 100}], paid=400)
+    m1 = H.manifest(db)
+    assert set(m1) == set(H.KINDS) and len(m1["invoice"]) == 0 and len(m1["purchase"]) == 1
+    have = {k: dict(map(tuple, v)) for k, v in m1.items()}
+    inv = trading.create_invoice(db, cust, [{"product_id": prod, "qty": 1, "price": 150}], paid=150)
+    m2 = {k: dict(map(tuple, v)) for k, v in H.manifest(db).items()}
+    changed = {k: [i for i, fp in v.items() if have[k].get(i) != fp] for k, v in m2.items()}
+    assert changed["invoice"] == [inv] and changed["purchase"] == [] and changed["product"] == [prod]
+    got = H.fetch(db, changed)
+    rec = got["invoice"][0]
+    assert rec["no"] == "INV-00001" and rec["lines"][0]["qty"] == 1 and rec["_fp"] == m2["invoice"][inv]
+    assert got["product"][0]["qty"] == 3
+    trading.cancel_invoice(db, inv)                                      # a change on the computer...
+    m3 = {k: dict(map(tuple, v)) for k, v in H.manifest(db).items()}
+    assert m3["invoice"][inv] != m2["invoice"][inv]                     # ...is noticed and fetched again
+    assert H.fetch(db, {"invoice": [inv]})["invoice"][0]["status"] == "cancelled"
+    assert H.fetch(db, {"meta": [1]})["meta"][0]["dashboard"]["phones_in_stock"] == 0
+    big = H.fetch(db, {"product": list(range(1, 1000)), "party": [1]})
+    assert sum(len(v) for v in big.values()) <= H.MAX_FETCH
+
+
+def test_sync_through_the_encrypted_api(shop):
+    db, sup, cust, prod = shop
+    trading.create_purchase(db, sup, [{"product_id": prod, "qty": 2, "price": 100}], paid=200)
+    phone = _paired(db)
+    h = phone.ask(db, "sync_hello")["data"]
+    assert h["series"] == "MB1"
+    other = _Phone("second-phone-0002")
+    from app.services import companion as C
+    pairing = C.Pairing()
+    C.pair(db, pairing, other.pair_body(C.hello(db), pairing.start()))
+    assert other.ask(db, "sync_hello")["data"]["series"] == "MB2"       # each phone its own series
+    assert phone.ask(db, "sync_hello")["data"]["series"] == "MB1"
+    r = phone.ask(db, "sync_push", ops=[_op("phone1-000001", "sale", {"no": "MB1-00001", "party_id": cust,
+                                                            "items": [{"product_id": prod, "qty": 1, "price": 150}],
+                                                            "paid": 150})])
+    assert r["data"][0]["status"] == "applied"
+    bad = other.ask(db, "sync_push", ops=[_op("phone2-000001", "sale", {"no": "MB1-00002", "party_id": cust,
+                                                              "items": [{"product_id": prod, "qty": 1, "price": 150}],
+                                                              "paid": 150})])
+    assert bad["data"][0]["status"] == "conflict"                       # a phone cannot use another's series
+    man = phone.ask(db, "sync_manifest")["data"]
+    assert len(man["invoice"]) == 1
+    assert phone.ask(db, "sync_fetch", want={"invoice": [man["invoice"][0][0]]})["data"]["invoice"][0]["no"] == "MB1-00001"

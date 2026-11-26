@@ -73,6 +73,18 @@ CREATE TABLE IF NOT EXISTS loan_entries (            -- balance of a person = lo
 );
 CREATE INDEX IF NOT EXISTS idx_loan_entries_person ON loan_entries(person_id);
 
+CREATE TABLE IF NOT EXISTS sync_inbox (               -- every transaction received from a paired phone, once
+    op_id TEXT PRIMARY KEY,                            -- made on the phone: unique, so a resend is never applied twice
+    device_id TEXT NOT NULL, kind TEXT NOT NULL,
+    made_at TEXT,                                      -- when it was made on the phone
+    received_at TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('applied','conflict','dismissed')),
+    doc_type TEXT, doc_id INTEGER, doc_no TEXT,        -- what it became on this computer
+    message TEXT,                                      -- why it could not be applied / a warning
+    payload TEXT NOT NULL                              -- kept in full: a financial record is never thrown away
+);
+CREATE INDEX IF NOT EXISTS idx_sync_inbox_status ON sync_inbox(status);
+
 CREATE TABLE IF NOT EXISTS app_settings (            -- small settings kept inside the (encrypted) database:
     key TEXT PRIMARY KEY, value TEXT, updated_at TEXT  -- SMS template, business payment details, paired phones
 );
@@ -257,7 +269,7 @@ CREATE UNIQUE INDEX idx_serials_imei2 ON serials(imei2) WHERE imei2 IS NOT NULL;
 
 SCHEMA_SQL += V3_TABLES
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def migrate(conn):

@@ -122,6 +122,10 @@ def suggest_invoice_no(db, reserved=(), today=None) -> str:
 
 def _take_invoice_no(c, wanted):
     """Use the number the window was given; if someone took it meanwhile, fall back to the next free one."""
+    if wanted and not wanted.startswith("INV-"):     # a phone's own series (e.g. MB1-00001): kept as it is
+        if c.execute("SELECT 1 FROM invoices WHERE no=?", (wanted,)).fetchone():
+            raise BusinessError(f"Invoice number {wanted} already exists")
+        return wanted
     if wanted:
         n = _inv_num(wanted)
         if not c.execute("SELECT 1 FROM invoices WHERE no=?", (wanted,)).fetchone():

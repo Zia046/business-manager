@@ -190,7 +190,7 @@ def api(db, env: dict) -> dict:
     if op is None:
         return seal(key, device_id, {"ok": False, "error": "unknown_op", "message": "Update the app"})
     try:
-        out = {"ok": True, "data": op(db, req.get("args") or {}, dev)}
+        out = {"ok": True, "data": op(db, req.get("args") or {}, dict(dev, id=device_id))}
     except sms_template.TemplateConflict as exc:
         out = {"ok": False, "error": "conflict", "message": str(exc), "data": exc.current}
     except BusinessError as exc:
@@ -316,6 +316,32 @@ def _find(db, args, with_ledger=True):
     raise BusinessError("This customer has no outstanding balance any more")
 
 
+def _series(db, dev):
+    from .sync_hub import device_series
+    st = state(db)
+    old = (st["devices"].get(dev["id"]) or {}).get("series")
+    series = device_series(st, dev["id"])
+    if series != old:
+        settings_store.save(db, KEY_STATE, st)
+    return series
+
+
+def _hub():
+    from . import sync_hub
+    return sync_hub
+
+
+def _op_sync_hello(db, args, dev):
+    """Start of a two-way sync: this phone's invoice series and the computer's clock."""
+    return {"series": _series(db, dev), "server_id": state(db)["server_id"], "shop": hello(db)["shop"],
+            "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "api": API_VERSION}
+
+
+def _op_sync_push(db, args, dev):
+    from .sync_hub import push
+    return push(db, dev["id"], _series(db, dev), args.get("ops") or [])
+
+
 def _overview(db):
     from .business_overview import overview
     return overview(db)
@@ -348,6 +374,11 @@ OPS = {
     "sync": _op_sync,
     "summary": lambda db, a, d: summary(db),
     "overview": lambda db, a, d: _overview(db),
+    # two-way sync (Android app 3.x)
+    "sync_hello": _op_sync_hello,
+    "sync_push": _op_sync_push,
+    "sync_manifest": lambda db, a, d: _hub().manifest(db),
+    "sync_fetch": lambda db, a, d: _hub().fetch(db, a.get("want")),
     "customers": lambda db, a, d: outstanding_list(db, False),
     "ledger": lambda db, a, d: _find(db, a)["ledger"],
     "payments": lambda db, a, d: [l for l in _find(db, a)["ledger"] if l["credit"] > 0],
