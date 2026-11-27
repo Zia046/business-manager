@@ -100,7 +100,11 @@ public class DocActivity extends BaseActivity {
         page.addView(totals, Ui.lp(this, 12));
 
         Button save = Ui.button(this, "SAVE", Ui.RED);
-        save.setOnClickListener(v -> save());
+        save.setOnClickListener(v -> {
+            if (!save.isEnabled()) return;
+            save.setEnabled(false);                        // one tap = one bill
+            if (!save()) save.setEnabled(true);
+        });
         page.addView(save, Ui.lp(this, 14));
         showLines();
     }
@@ -279,7 +283,7 @@ public class DocActivity extends BaseActivity {
                 : ("purchase".equals(kind) ? "On credit (we owe): " + Ui.money(left) : "Taken off the supplier's account: " + Ui.money(left)));
     }
 
-    private void save() {
+    private boolean save() {
         try {
             Op op = Local.engine(this).record(kind, data());
             Sync.now(this);
@@ -287,8 +291,10 @@ public class DocActivity extends BaseActivity {
             startActivity(new android.content.Intent(this, DetailActivity.class)
                     .putExtra("kind", DetailActivity.docKind(kind)).putExtra("id", "op:" + op.opId));
             finish();
+            return true;
         } catch (Engine.Invalid e) {
             new AlertDialog.Builder(this).setTitle("Cannot save").setMessage(e.getMessage()).setPositiveButton("OK", null).show();
+            return false;
         }
     }
 }

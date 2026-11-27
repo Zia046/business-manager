@@ -2723,6 +2723,8 @@ def test_android_scenarios_against_windows(shop, java_phone):
         ("expense", {"category": "Tea", "amount": 50}),
     ]:
         assert ph.record(kind, data)["ok"], (kind, ph.record)
+    again = ph.record("expense", {"category": "Tea", "amount": 50})          # SAVE pressed twice
+    assert not again["ok"] and "not saved a second time" in again["invalid"]
     kam_key = "op:" + new["op_id"]
     assert stock(prod) == 11 - 3 + 6 - 1 and bal("customer", kam_key) == 350
     assert len(ph.out(f"phones {tecno}")) == 3

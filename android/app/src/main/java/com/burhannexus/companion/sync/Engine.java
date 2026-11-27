@@ -81,7 +81,17 @@ public final class Engine {
     // sync
     // =====================================================================================================
     /** One full sync. Returns true when everything was exchanged. Never throws. */
-    public synchronized boolean sync(Transport t) {
+    /** Only one sync at a time. Saving an entry does NOT wait for it (it used to: the screen froze for the
+     *  length of a sync and a second tap on SAVE was then saved as a second entry). */
+    private final Object syncLock = new Object();
+
+    public boolean sync(Transport t) {
+        synchronized (syncLock) {
+            return syncOnce(t);
+        }
+    }
+
+    private boolean syncOnce(Transport t) {
         setState(SYNCING);
         try {
             Map<String, Object> hello = Json.map(t.call("sync_hello", Json.of()));
@@ -90,8 +100,10 @@ public final class Engine {
             store.setMeta("shop", Json.txt(hello.get("shop")));
             long serverLast = Json.lng(hello.get("series_last"));
             String key = "counter_" + series;
-            long mine = store.meta(key) == null ? 0 : Long.parseLong(store.meta(key));
-            if (serverLast > mine) store.setMeta(key, String.valueOf(serverLast));   // e.g. after a reinstall
+            synchronized (this) {                                   // the invoice counter is shared with record()
+                long mine = store.meta(key) == null ? 0 : Long.parseLong(store.meta(key));
+                if (serverLast > mine) store.setMeta(key, String.valueOf(serverLast));   // e.g. after a reinstall
+            }
 
             push(t);
             pull(t);
@@ -539,8 +551,17 @@ public final class Engine {
     }
 
     /** Checks and saves one transaction. `data` uses refs (Long or {"op": id}) for customers/suppliers/products. */
+    static final long SAME_ENTRY_MS = 20_000;
+    private String lastEntry;
+    private long lastEntryAt;
+
     public synchronized Op record(String kind, Map<String, Object> data) throws Invalid {
         check(kind, data);
+        String same = kind + "|" + Json.write(data);
+        long nowMs = System.currentTimeMillis();
+        if (same.equals(lastEntry) && nowMs - lastEntryAt < SAME_ENTRY_MS) {
+            throw new Invalid("This entry was just saved. It was not saved a second time.");
+        }
         final Op op = new Op();
         op.opId = newId();
         op.kind = kind;
@@ -563,6 +584,8 @@ public final class Engine {
             store.addOp(op);
             if (counterKey[0] != null) store.setMeta(counterKey[0], String.valueOf(counterVal[0]));
         });
+        lastEntry = same;
+        lastEntryAt = nowMs;
         return op;
     }
 

@@ -63,15 +63,18 @@ public class MoneyActivity extends BaseActivity {
         Button save = Ui.button(this, "SAVE", Ui.RED);
         final EditText cat = category;
         save.setOnClickListener(v -> {
+            if (!save.isEnabled()) return;
             Map<String, Object> d = Json.of("amount", Pick.num(amount), "note", note.getText().toString().trim());
             if (cat != null) d.put("category", cat.getText().toString().trim());
             if (partyKey != null) d.put("party_id", Engine.ref(partyKey));
+            save.setEnabled(false);                    // one tap = one entry
             try {
                 Local.engine(this).record(kind, d);
                 Sync.now(this);
                 Ui.toast(this, "Saved. It goes to the computer by itself.");
                 finish();
             } catch (Engine.Invalid e) {
+                save.setEnabled(true);
                 new AlertDialog.Builder(this).setTitle("Cannot save").setMessage(e.getMessage()).setPositiveButton("OK", null).show();
             }
         });
